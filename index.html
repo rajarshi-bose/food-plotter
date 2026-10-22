@@ -21,6 +21,11 @@
     --green: #189a6c;   /* jade */
     --yellow: #f0a800;  /* saffron */
     --red: #ec5a3a;     /* tomato */
+    --point: #4a66b8;   /* matte blue for plotted foods */
+    --point-edge: #34498a;
+    --c-cost: #189a6c;
+    --c-portion: #d08f00;
+    --c-taste: #ec5a3a;
     --bar-h: 58px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,6 +36,7 @@
     font-family: "Schibsted Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
     overflow: hidden;
   }
+  button, input, select { font-family: inherit; }
 
   /* soft colored blobs so the translucent sheet has something to blur */
   .blobs { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
@@ -119,6 +125,206 @@
   }
   canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
   canvas.dragging { cursor: grabbing; }
+  canvas.over-point { cursor: pointer; }
+  .hint {
+    position: absolute; left: 14px; bottom: 12px;
+    font-size: 12px; color: var(--muted);
+    pointer-events: none;
+  }
+
+  /* ---------- point info window ---------- */
+  .info {
+    position: absolute; left: 0; top: 0;
+    width: 268px;
+    background: #fff;
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    box-shadow: 4px 4px 0 var(--ink);
+    padding: 12px 14px 13px;
+    z-index: 3;
+    animation: infoIn .16s ease-out;
+  }
+  .info[hidden] { display: none; }
+  @keyframes infoIn { from { opacity: 0; transform: translateY(4px); } }
+  .info-close {
+    position: absolute; top: 6px; right: 7px;
+    border: none; background: none; cursor: pointer;
+    font-size: 18px; line-height: 1; color: var(--muted); padding: 2px 4px;
+  }
+  .info-close:hover { color: var(--ink); }
+  .info h3 { font-size: 17px; font-weight: 700; line-height: 1.2; padding-right: 18px; }
+  .info .loc { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .info .loc:empty { display: none; }
+  .info .scores { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+  .score-row { display: grid; grid-template-columns: 76px auto 1fr; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+  .score-row .num { text-align: right; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .mini-dots { display: flex; gap: 3px; }
+  .mini-dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--c); display: block; }
+  .mini-dots i.on { background: var(--c); }
+  .info .kw-head { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 11px 0 5px; }
+
+  /* ---------- keyword chips (shared) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11.5px; line-height: 1;
+    padding: 4px 8px;
+    background: #eef1fb; color: #2d3f7a;
+    border-radius: 999px;
+  }
+  .chip button { border: none; background: none; cursor: pointer; color: inherit; opacity: .6; font-size: 13px; line-height: 1; padding: 0 0 0 2px; }
+  .chip button:hover { opacity: 1; }
+  .chips .none { font-size: 12px; color: var(--muted); }
+
+  /* ---------- side panel ---------- */
+  .panel {
+    flex: 0 0 300px;
+    height: min(100%, 680px);
+    display: flex; flex-direction: column;
+    padding: 16px;
+    gap: 13px;
+    overflow-y: auto;
+  }
+  .stat-bar { display: flex; flex-direction: column; gap: 5px; }
+  .section-label { font-family: Silkscreen, monospace; font-size: 13px; }
+  .stat-bar select {
+    width: 100%;
+    font-size: 13px;
+    padding: 8px 10px;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .stat-bar select:focus { outline: none; border-color: var(--blue); }
+
+  .add-btn {
+    font-family: Silkscreen, monospace;
+    font-size: 15px;
+    padding: 11px;
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    background: var(--blue);
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 var(--ink);
+    transition: transform .12s, box-shadow .12s;
+    flex: none;
+  }
+  .add-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  .add-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+
+  .add-form {
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 13px;
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+    flex: none;
+  }
+  .add-form[hidden] { display: none; }
+  .field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; position: relative; }
+  .field input[type="text"] {
+    font: inherit; font-weight: 400;
+    padding: 8px 10px;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    outline: none;
+  }
+  .field input[type="text"]:focus { border-color: var(--blue); }
+  .field input[type="text"].bad { border-color: var(--red); }
+
+  /* location suggestions */
+  .suggest {
+    position: absolute; left: 0; right: 0; top: 100%;
+    margin-top: 4px;
+    background: #fff;
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    box-shadow: 3px 3px 0 var(--ink);
+    list-style: none;
+    max-height: 210px; overflow-y: auto;
+    z-index: 6;
+    padding: 4px;
+  }
+  .suggest[hidden] { display: none; }
+  .suggest li {
+    padding: 7px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .suggest li small { font-weight: 400; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .suggest li.hl { background: #eef1fb; }
+
+  /* 0-10 circle ratings */
+  .rating-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .rating-head output { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .rating {
+    display: flex; justify-content: space-between;
+    padding: 3px 0;
+    cursor: pointer;
+    touch-action: none;
+    border-radius: 6px;
+    outline: none;
+  }
+  .rating:focus-visible { box-shadow: 0 0 0 2px var(--blue); }
+  .rating i {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid var(--c);
+    display: block;
+    transition: transform .08s;
+  }
+  .rating i.on { background: var(--c); }
+  .rating:hover i { transform: scale(1.04); }
+
+  .kw-input { display: flex; flex-direction: column; gap: 6px; }
+
+  .form-actions { display: flex; gap: 8px; }
+  .form-actions button {
+    flex: 1;
+    font: 600 13px "Schibsted Grotesk", sans-serif;
+    padding: 9px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .btn-cancel { background: #fff; border: 2px solid var(--line); color: var(--muted); }
+  .btn-save   { background: var(--green); border: 2px solid var(--ink); color: #fff; }
+
+  .list-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: Silkscreen, monospace; font-size: 13px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+  }
+  .list-head span { font-family: "Schibsted Grotesk", sans-serif; color: var(--muted); font-size: 12px; }
+  .list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .list li.item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 8px 7px 10px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid var(--line);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .list li.item:hover, .list li.item.active { border-color: var(--point); }
+  .list li.item.selected { border-color: var(--point); box-shadow: inset 3px 0 0 var(--point); }
+  .list .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--point); flex: none; }
+  .list .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .list .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted); }
+  .list .where:empty { display: none; }
+  .list .vals { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .list .del {
+    border: none; background: none; cursor: pointer;
+    color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 4px;
+  }
+  .list .del:hover { color: var(--red); }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 14px 0; }
+
   /* ---------- version + fixes log ---------- */
   .ver-row {
     position: fixed; right: 18px; bottom: 10px; z-index: 5;
@@ -155,110 +361,16 @@
   .fx ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; }
   .fx li::marker { color: var(--muted); }
 
-  .hint {
-    position: absolute; left: 14px; bottom: 12px;
-    font-size: 12px; color: var(--muted);
-    pointer-events: none;
-  }
-
-  /* ---------- side panel ---------- */
-  .panel {
-    flex: 0 0 280px;
-    height: min(100%, 680px);
-    display: flex; flex-direction: column;
-    padding: 18px;
-    gap: 14px;
-    overflow: hidden;
-  }
-  .add-btn {
-    font-family: Silkscreen, monospace;
-    font-size: 15px;
-    padding: 12px;
-    border: 2px solid var(--ink);
-    border-radius: 10px;
-    background: var(--blue);
-    color: #fff;
-    cursor: pointer;
-    box-shadow: 3px 3px 0 var(--ink);
-    transition: transform .12s, box-shadow .12s;
-  }
-  .add-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
-  .add-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
-
-  .add-form {
-    display: flex; flex-direction: column; gap: 12px;
-    padding: 14px;
-    border: 2px dashed var(--line);
-    border-radius: 12px;
-  }
-  .add-form[hidden] { display: none; }
-  .field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; }
-  .field input[type="text"] {
-    font: inherit; font-weight: 400;
-    padding: 8px 10px;
-    border: 2px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-    outline: none;
-  }
-  .field input[type="text"]:focus { border-color: var(--blue); }
-  .field input[type="text"].bad { border-color: var(--red); }
-  .slider-head { display: flex; justify-content: space-between; }
-  .slider-head output { font-variant-numeric: tabular-nums; }
-  .field input[type="range"] { width: 100%; }
-  .f-cost    { accent-color: var(--green); }
-  .f-portion { accent-color: var(--yellow); }
-  .f-taste   { accent-color: var(--red); }
-
-  .form-actions { display: flex; gap: 8px; }
-  .form-actions button {
-    flex: 1;
-    font: 600 13px "Schibsted Grotesk", sans-serif;
-    padding: 9px;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  .btn-cancel { background: #fff; border: 2px solid var(--line); color: var(--muted); }
-  .btn-save   { background: var(--green); border: 2px solid var(--ink); color: #fff; }
-
-  .list-head {
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-family: Silkscreen, monospace; font-size: 13px;
-    padding-top: 4px;
-    border-top: 1px solid var(--line);
-  }
-  .list-head span { font-family: "Schibsted Grotesk", sans-serif; color: var(--muted); font-size: 12px; }
-  .list { list-style: none; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; }
-  .list li {
-    display: flex; align-items: center; gap: 8px;
-    padding: 7px 8px 7px 10px;
-    border-radius: 8px;
-    background: #fff;
-    border: 1px solid var(--line);
-    font-size: 13px;
-  }
-  .list li.active { border-color: var(--blue); }
-  .list .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--blue); flex: none; }
-  .list .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-  .list .vals { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-  .list .del {
-    border: none; background: none; cursor: pointer;
-    color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 4px;
-  }
-  .list .del:hover { color: var(--red); }
-  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 14px 0; }
-
   @media (max-width: 760px) {
     body { overflow: auto; }
     main {
       position: static; margin-top: var(--bar-h);
       flex-direction: column; align-items: stretch;
-      padding: 16px; gap: 20px;
+      padding: 16px 16px 56px; gap: 20px;
     }
     .plot-card { height: 60vh; max-width: none; flex: none; }
-    .panel { flex: none; height: auto; max-height: none; }
+    .panel { flex: none; height: auto; max-height: none; overflow: visible; }
     .title-slot { font-size: 16px; }
-    main { padding-bottom: 56px; }
   }
 </style>
 </head>
@@ -278,30 +390,57 @@
 </header>
 
 <main>
-  <div class="card plot-card">
+  <div class="card plot-card" id="plotCard">
     <canvas id="plot"></canvas>
-    <div class="hint">Drag to rotate · scroll to zoom · double-click to reset</div>
+    <div class="info" id="info" hidden role="dialog" aria-labelledby="infoName">
+      <button class="info-close" id="infoClose" type="button" aria-label="Close">&times;</button>
+      <h3 id="infoName"></h3>
+      <div class="loc" id="infoLoc"></div>
+      <div class="scores" id="infoScores"></div>
+      <div class="kw-head">Keywords</div>
+      <div class="chips" id="infoKw"></div>
+    </div>
+    <div class="hint">Drag to rotate · scroll to zoom · click a point for details · double-click to reset</div>
   </div>
 
   <aside class="card panel">
-    <button class="add-btn" id="addBtn">+ Add point</button>
+    <div class="stat-bar">
+      <label class="section-label" for="statSel">Statistics</label>
+      <select id="statSel">
+        <option value="" selected>Choose a statistic…</option>
+      </select>
+    </div>
+
+    <button class="add-btn" id="addBtn" type="button">+ Add point</button>
 
     <div class="add-form" id="addForm" hidden>
-      <label class="field">Food
-        <input type="text" id="fName" maxlength="40" placeholder="e.g. Chipotle bowl">
-      </label>
-      <label class="field f-cost">
-        <span class="slider-head">Cost <output id="oCost">5</output></span>
-        <input type="range" id="fCost" min="0" max="10" step="0.5" value="5">
-      </label>
-      <label class="field f-portion">
-        <span class="slider-head">Portion Size <output id="oPortion">5</output></span>
-        <input type="range" id="fPortion" min="0" max="10" step="0.5" value="5">
-      </label>
-      <label class="field f-taste">
-        <span class="slider-head">Taste <output id="oTaste">5</output></span>
-        <input type="range" id="fTaste" min="0" max="10" step="0.5" value="5">
-      </label>
+      <div class="field">
+        <label for="fLoc">Location</label>
+        <input type="text" id="fLoc" maxlength="60" placeholder="e.g. Chipotle" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="suggest" aria-autocomplete="list">
+        <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+      </div>
+      <div class="field">
+        <label for="fItem">Item name</label>
+        <input type="text" id="fItem" maxlength="60" placeholder="e.g. Burrito bowl" autocomplete="off">
+      </div>
+      <div class="field">
+        <span class="rating-head">Cost <output id="oCost">0 / 10</output></span>
+        <div class="rating" id="rCost" style="--c: var(--c-cost)"></div>
+      </div>
+      <div class="field">
+        <span class="rating-head">Portion size <output id="oPortion">0 / 10</output></span>
+        <div class="rating" id="rPortion" style="--c: var(--c-portion)"></div>
+      </div>
+      <div class="field">
+        <span class="rating-head">Taste <output id="oTaste">0 / 10</output></span>
+        <div class="rating" id="rTaste" style="--c: var(--c-taste)"></div>
+      </div>
+      <div class="field kw-input">
+        <label for="fKw">Keywords</label>
+        <div class="chips" id="formKw"></div>
+        <input type="text" id="fKw" maxlength="30" placeholder="Add a keyword, press Enter" autocomplete="off">
+      </div>
       <div class="form-actions">
         <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
         <button type="button" class="btn-save" id="saveBtn">Add</button>
@@ -326,12 +465,25 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.4", d: "Oct 22, 2026", n: [
+    "New add form: location, item name, and 0–10 circle ratings for cost, portion size and taste",
+    "Typing a location suggests restaurants; picking one fills in its keywords, and you can add your own",
+    "Click a point to see its details: item, location, ratings and keywords",
+    "Click a food in the list to rotate and zoom to it and open its details",
+    "Points are now a flat matte blue",
+    "Added a Statistics menu (options coming soon)"] },
   { v: "1.3", d: "Oct 22, 2026", n: ["Food Plotter now has its own home at jarsh.us/food-plotter", "Added this Fixes log and a version number in the bottom-right corner"] },
   { v: "1.2", d: "Oct 22, 2026", n: ["Fixed Add point not adding foods to the plot", "Same jarsh.us link as the other apps, in the top-left corner", "Warmer color palette", "Axis titles no longer overlap their numbers"] },
   { v: "1.1", d: "Oct 22, 2026", n: ["Add foods with a name and sliders for cost, portion size and taste; they're saved in your browser", "Rotation stops at the edges so the grid never flips", "Removed the axis key"] },
   { v: "1.0", d: "Oct 22, 2026", n: ["First release: animated title, and a 3D plot of cost, portion size and taste you can drag to rotate and scroll to zoom"] },
 ];
 const VERSION = CHANGELOG[0].v;
+
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 /* =========================================================
    1. Intro: scrambled characters lock in one by one,
       then the title glides into the top bar.
@@ -341,9 +493,9 @@ const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&*+=?@!<>";
 const PALETTE = ["#2a4fd6", "#189a6c", "#f0a800", "#ec5a3a"];
 const rand = arr => arr[Math.floor(Math.random() * arr.length)];
 
-const intro = document.getElementById("introTitle");
-const slot = document.getElementById("titleSlot");
-const sheet = document.getElementById("sheet");
+const intro = $("introTitle");
+const slot = $("titleSlot");
+const sheet = $("sheet");
 
 // hand-picked, non-repeating order so it doesn't read as a 4-color logo cycle
 const [B, G, Y, R] = PALETTE;
@@ -356,7 +508,6 @@ const spans = [...TEXT].map(ch => {
   intro.appendChild(s);
   return s;
 });
-
 [...TEXT].forEach((ch, i) => {
   const s = document.createElement("span");
   s.textContent = ch;
@@ -364,13 +515,10 @@ const spans = [...TEXT].map(ch => {
   slot.appendChild(s);
 });
 
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
 function runScramble() {
   return new Promise(resolve => {
     let lockedCount = 0;
     const lockable = [...TEXT].map((c, i) => i).filter(i => TEXT[i] !== " ");
-
     const flicker = setInterval(() => {
       spans.forEach((s, i) => {
         if (TEXT[i] === " " || s.classList.contains("locked")) return;
@@ -378,22 +526,16 @@ function runScramble() {
         s.style.color = rand(PALETTE);
       });
     }, 45);
-
     const startDelay = reduceMotion ? 0 : 600;
     const step = reduceMotion ? 0 : 120;
-
     setTimeout(function lockNext() {
       const i = lockable[lockedCount];
       spans[i].textContent = TEXT[i];
       spans[i].style.color = finalColors[i];
       spans[i].classList.add("locked");
       lockedCount++;
-      if (lockedCount < lockable.length) {
-        setTimeout(lockNext, step);
-      } else {
-        clearInterval(flicker);
-        setTimeout(resolve, reduceMotion ? 0 : 450);
-      }
+      if (lockedCount < lockable.length) setTimeout(lockNext, step);
+      else { clearInterval(flicker); setTimeout(resolve, reduceMotion ? 0 : 450); }
     }, startDelay);
   });
 }
@@ -402,21 +544,16 @@ function moveToBar() {
   return new Promise(resolve => {
     const a = intro.getBoundingClientRect();
     const b = slot.getBoundingClientRect();
-
     intro.style.left = a.left + "px";
     intro.style.top = a.top + "px";
     intro.style.transform = "none";
     void intro.offsetWidth;
-
     const scale = b.width / a.width;
-    const dx = b.left - a.left;
-    const dy = b.top - a.top;
+    const dx = b.left - a.left, dy = b.top - a.top;
     const dur = reduceMotion ? 0 : 900;
-
     intro.style.transition = `transform ${dur}ms cubic-bezier(.65, 0, .25, 1)`;
     intro.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
     sheet.classList.add("gone");
-
     setTimeout(() => {
       slot.style.visibility = "visible";
       intro.remove();
@@ -436,15 +573,60 @@ try { ["400 12px", "600 12px", "700 14px"].forEach(f => document.fonts.load(f + 
 })();
 
 /* =========================================================
-   2. Saved points (kept in this browser's localStorage)
+   2. Restaurants + their keywords (for the location suggestions)
    ========================================================= */
-const STORE_KEY = "foodPlotter.points.v1";
+const PLACES = [
+  ["Taco Bell",               ["fast food", "mexican", "tex-mex", "tacos", "burritos", "drive-thru", "late night", "cheap"]],
+  ["Chipotle",                ["fast casual", "mexican", "burritos", "bowls", "build your own"]],
+  ["Mai Shan Yun",            ["asian fusion", "chinese", "noodles", "local", "sit-down"]],
+  ["McDonald's",              ["fast food", "american", "burgers", "fries", "breakfast", "drive-thru", "cheap"]],
+  ["Whataburger",             ["fast food", "american", "burgers", "texas", "late night", "drive-thru"]],
+  ["Chick-fil-A",             ["fast food", "american", "chicken", "sandwiches", "drive-thru"]],
+  ["Raising Cane's",          ["fast food", "american", "chicken", "chicken fingers", "drive-thru"]],
+  ["Layne's Chicken Fingers", ["fast food", "american", "chicken", "chicken fingers", "local", "texas"]],
+  ["Torchy's Tacos",          ["fast casual", "tex-mex", "tacos", "texas"]],
+  ["Fuego Tortilla Grill",    ["fast casual", "tex-mex", "tacos", "local", "late night"]],
+  ["Freebirds World Burrito", ["fast casual", "tex-mex", "burritos", "build your own", "texas"]],
+  ["Panda Express",           ["fast food", "chinese", "american chinese", "rice", "noodles"]],
+  ["Subway",                  ["fast food", "sandwiches", "subs", "build your own"]],
+  ["Jersey Mike's",           ["fast casual", "sandwiches", "subs"]],
+  ["Five Guys",               ["fast casual", "american", "burgers", "fries"]],
+  ["Wendy's",                 ["fast food", "american", "burgers", "drive-thru"]],
+  ["Sonic",                   ["fast food", "american", "burgers", "drive-in", "drinks"]],
+  ["Popeyes",                 ["fast food", "chicken", "fried chicken", "cajun"]],
+  ["Wingstop",                ["fast food", "chicken", "wings"]],
+  ["Domino's",                ["fast food", "pizza", "delivery"]],
+  ["Pizza Hut",               ["fast food", "pizza", "delivery"]],
+  ["Panera Bread",            ["fast casual", "bakery", "sandwiches", "soup", "salads"]],
+  ["Cava",                    ["fast casual", "mediterranean", "bowls", "build your own"]],
+  ["Starbucks",               ["coffee", "cafe", "drinks", "pastries"]],
+].map(([name, keywords]) => ({ name, keywords }));
 
+const findPlace = name => PLACES.find(p => p.name.toLowerCase() === String(name).trim().toLowerCase());
+
+/* =========================================================
+   3. Saved points (kept in this browser's localStorage)
+   ========================================================= */
+const STORE_KEY = "foodPlotter.points.v2";
+const OLD_KEY = "foodPlotter.points.v1";
+
+function normalize(p) {
+  return {
+    id: p.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    item: String(p.item ?? p.name ?? "").trim() || "Untitled",
+    location: String(p.location ?? "").trim(),
+    cost: clamp(Math.round(+p.cost || 0), 0, 10),
+    portion: clamp(Math.round(+p.portion || 0), 0, 10),
+    taste: clamp(Math.round(+p.taste || 0), 0, 10),
+    keywords: Array.isArray(p.keywords) ? p.keywords.map(String) : [],
+  };
+}
 function loadPoints() {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    let raw = localStorage.getItem(STORE_KEY);
+    if (!raw) raw = localStorage.getItem(OLD_KEY); // carry over foods from earlier versions
     const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
+    return Array.isArray(arr) ? arr.map(normalize) : [];
   } catch (e) { return []; }
 }
 function savePoints() {
@@ -453,34 +635,39 @@ function savePoints() {
 }
 
 let points = loadPoints();
-let activeId = null;
+savePoints();
+let hoverId = null;      // list hover highlight
+let selectedId = null;   // point whose info window is open
 
 /* =========================================================
-   3. 3D plotter (plain canvas, no libraries)
+   4. 3D plotter (plain canvas, no libraries)
       x = Cost, y = Taste (vertical), z = Portion Size
       Cube spans -1..1; values 0..10 map onto it.
    ========================================================= */
-const canvas = document.getElementById("plot");
+const canvas = $("plot");
 const ctx = canvas.getContext("2d");
+const plotCard = $("plotCard");
 
 const AXES = {
   x: { name: "Cost",         color: "#189a6c" },
   y: { name: "Taste",        color: "#ec5a3a" },
   z: { name: "Portion Size", color: "#d08f00" },
 };
-const POINT_COLOR = "#2a4fd6";
+const POINT_FILL = "#4a66b8";
+const POINT_EDGE = "#34498a";
 const TICKS = 5;
 
 // Rotation is limited to one quadrant so the back walls never flip.
-// Walls sit at x = -1, z = -1 and the floor at y = -1.
 const YAW_MIN = -Math.PI / 2 + 0.12, YAW_MAX = -0.12;
 const PITCH_MIN = 0.08, PITCH_MAX = 1.3;
-const DEFAULT_VIEW = { yaw: -0.75, pitch: 0.42, zoom: 1 };
-let view = { ...DEFAULT_VIEW };
+const ZOOM_MIN = 0.55, ZOOM_MAX = 2.6;
+const DEFAULT_VIEW = { yaw: -0.75, pitch: 0.42, zoom: 1, fx: 0, fy: 0, fz: 0 };
+let view = { ...DEFAULT_VIEW };   // fx/fy/fz = the spot the camera is centered on
 let vel = { yaw: 0, pitch: 0 };
+let tween = null;                 // camera animation in progress
 
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const toCube = v => -1 + v / 5;
+const posOf = p => [toCube(p.cost), toCube(p.taste), toCube(p.portion)];
 
 let W = 0, H = 0;
 function resize() {
@@ -495,6 +682,7 @@ window.addEventListener("resize", resize);
 resize();
 
 function rotate([x, y, z]) {
+  x -= view.fx; y -= view.fy; z -= view.fz;
   const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw);
   const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
   const x1 = x * cy + z * sy;
@@ -504,11 +692,11 @@ function rotate([x, y, z]) {
   return [x1, y2, z2];
 }
 
+const baseScale = () => Math.min(W, H) * 0.24 * view.zoom;
 function project(p) {
   const [x, y, z] = rotate(p);
   const D = 6;
-  const base = Math.min(W, H) * 0.24 * view.zoom;
-  const s = base * D / (D - z);
+  const s = baseScale() * D / (D - z);
   return { x: W / 2 + x * s, y: H / 2 - 6 - y * s, depth: z, s };
 }
 
@@ -524,13 +712,13 @@ function line(a, b, color, width = 1, dash = null) {
   ctx.setLineDash([]);
 }
 
-function label(pt, text, color, font = "12px 'Schibsted Grotesk'", align = "center", dx = 0) {
+function label(pt, text, color, font = "12px 'Schibsted Grotesk'") {
   const p = project(pt);
   ctx.font = font;
   ctx.fillStyle = color;
-  ctx.textAlign = align;
+  ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, p.x + dx, p.y);
+  ctx.fillText(text, p.x, p.y);
 }
 
 function fillPlane(pts, color) {
@@ -544,11 +732,9 @@ function fillPlane(pts, color) {
 function drawGrid() {
   const grid = "rgba(29, 27, 38, 0.08)";
   const frame = "rgba(29, 27, 38, 0.22)";
-
   fillPlane([[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]], "rgba(24, 154, 108, 0.05)");
   fillPlane([[-1, -1, -1], [-1, 1, -1], [-1, 1, 1], [-1, -1, 1]], "rgba(240, 168, 0, 0.06)");
   fillPlane([[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1]], "rgba(42, 79, 214, 0.04)");
-
   for (let i = 0; i <= TICKS; i++) {
     const t = -1 + (2 * i) / TICKS;
     const c = (i === 0 || i === TICKS) ? frame : grid;
@@ -566,7 +752,6 @@ function drawAxes() {
   line([-1, -1, 1], [1, -1, 1], AXES.x.color, 3);    // Cost: front floor edge
   line([1, -1, -1], [1, -1, 1], AXES.z.color, 3);    // Portion: other front floor edge
   line([-1, -1, -1], [-1, 1, -1], AXES.y.color, 3);  // Taste: back corner
-
   ctx.globalAlpha = 0.8;
   for (let i = 0; i <= TICKS; i++) {
     const t = -1 + (2 * i) / TICKS;
@@ -576,51 +761,62 @@ function drawAxes() {
     label([-1 - pad * 0.8, t, -1 - pad * 0.8], v, AXES.y.color, "11px 'Schibsted Grotesk'");
   }
   ctx.globalAlpha = 1;
-
   const title = "700 14px 'Schibsted Grotesk'";
   label([0, -1.08, 1.6], AXES.x.name, AXES.x.color, title);
   label([1.6, -1.08, 0], AXES.z.name, AXES.z.color, title);
   label([-1, 1.22, -1], AXES.y.name, AXES.y.color, title);
 }
 
+let hits = [];  // screen positions of points from the last frame, for clicking
+function pointRadius(scr, emphasized) {
+  return (emphasized ? 8.5 : 7) * view.zoom * (scr.s / baseScale());
+}
+
 function drawPoints() {
   const drawn = points.map(p => {
-    const pos = [toCube(p.cost), toCube(p.taste), toCube(p.portion)];
+    const pos = posOf(p);
     return { p, pos, scr: project(pos) };
   }).sort((a, b) => a.scr.depth - b.scr.depth); // far ones first
 
   // drop lines to the floor
   drawn.forEach(({ pos }) => {
-    line(pos, [pos[0], -1, pos[2]], "rgba(42, 79, 214, 0.35)", 1, [3, 3]);
+    line(pos, [pos[0], -1, pos[2]], "rgba(74, 102, 184, 0.35)", 1, [3, 3]);
     const f = project([pos[0], -1, pos[2]]);
     ctx.beginPath();
     ctx.ellipse(f.x, f.y, 4, 2, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(42, 79, 214, 0.25)";
+    ctx.fillStyle = "rgba(74, 102, 184, 0.22)";
     ctx.fill();
   });
 
+  hits = [];
   drawn.forEach(({ p, scr }) => {
-    const active = p.id === activeId;
-    const r = (active ? 9 : 7) * view.zoom * (scr.s / (Math.min(W, H) * 0.24 * view.zoom));
-    const g = ctx.createRadialGradient(scr.x - r * 0.35, scr.y - r * 0.35, r * 0.1, scr.x, scr.y, r);
-    g.addColorStop(0, "#8fa6f0");
-    g.addColorStop(1, POINT_COLOR);
+    const sel = p.id === selectedId;
+    const emph = sel || p.id === hoverId;
+    const r = pointRadius(scr, emph);
+    hits.push({ id: p.id, x: scr.x, y: scr.y, r, depth: scr.depth });
+
+    if (sel) { // soft ring around the open point
+      ctx.beginPath();
+      ctx.arc(scr.x, scr.y, r + 5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(74, 102, 184, 0.18)";
+      ctx.fill();
+    }
     ctx.beginPath();
     ctx.arc(scr.x, scr.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = g;
+    ctx.fillStyle = POINT_FILL;                 // flat, matte: no gradient or shine
     ctx.fill();
-    ctx.lineWidth = active ? 2.5 : 1.5;
-    ctx.strokeStyle = "#1d1b26";
+    ctx.lineWidth = emph ? 2 : 1.25;
+    ctx.strokeStyle = emph ? "#1d1b26" : POINT_EDGE;
     ctx.stroke();
 
-    ctx.font = (active ? "700 " : "600 ") + "12px 'Schibsted Grotesk'";
+    ctx.font = (emph ? "700 " : "600 ") + "12px 'Schibsted Grotesk'";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(255,255,255,.9)";
-    ctx.strokeText(p.name, scr.x + r + 5, scr.y);
+    ctx.strokeText(p.item, scr.x + r + 5, scr.y);
     ctx.fillStyle = "#1d1b26";
-    ctx.fillText(p.name, scr.x + r + 5, scr.y);
+    ctx.fillText(p.item, scr.x + r + 5, scr.y);
   });
 }
 
@@ -629,21 +825,69 @@ function draw() {
   drawGrid();
   drawAxes();
   drawPoints();
+  placeInfo();
 }
 
-/* ---------- rotation / zoom ---------- */
-let dragging = false, last = null;
+/* ---------- camera animation ---------- */
+const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+function animateView(target, ms = 650, done = null) {
+  vel = { yaw: 0, pitch: 0 };
+  if (reduceMotion) { Object.assign(view, target); done && done(); return; }
+  tween = { from: { ...view }, to: { ...view, ...target }, t0: performance.now(), ms, done };
+}
+function stepTween(now) {
+  if (!tween) return;
+  const k = ease(Math.min(1, (now - tween.t0) / tween.ms));
+  for (const key of Object.keys(tween.to)) view[key] = tween.from[key] + (tween.to[key] - tween.from[key]) * k;
+  if (k >= 1) { const d = tween.done; tween = null; d && d(); }
+}
+
+// rotate and zoom toward a point so it's clearly visible, then open its window
+function focusPoint(id) {
+  const p = points.find(q => q.id === id);
+  if (!p) return;
+  closeInfo();
+  const [x, y, z] = posOf(p);
+  animateView({
+    // turn slightly toward the point's side of the cube, tilt toward its height
+    yaw: clamp(-Math.PI / 4 + (x - z) * 0.28, YAW_MIN, YAW_MAX),
+    pitch: clamp(0.38 + y * 0.18, PITCH_MIN, PITCH_MAX),
+    zoom: clamp(Math.max(view.zoom, 1.55), ZOOM_MIN, ZOOM_MAX),
+    fx: x * 0.85, fy: y * 0.85, fz: z * 0.85,
+  }, 700, () => openInfo(id));
+}
+
+/* ---------- rotation / zoom / clicking ---------- */
+let dragging = false, last = null, downAt = null, moved = 0;
+
+function hitTest(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  const x = clientX - r.left, y = clientY - r.top;
+  let best = null;
+  for (const h of hits) {           // later entries are nearer the viewer
+    const d = Math.hypot(h.x - x, h.y - y);
+    if (d <= h.r + 4) best = h;
+  }
+  return best;
+}
 
 canvas.addEventListener("pointerdown", e => {
-  dragging = true;
+  dragging = true; moved = 0;
   last = { x: e.clientX, y: e.clientY };
+  downAt = { x: e.clientX, y: e.clientY };
   vel = { yaw: 0, pitch: 0 };
+  tween = null;
   canvas.setPointerCapture(e.pointerId);
-  canvas.classList.add("dragging");
 });
 
 canvas.addEventListener("pointermove", e => {
-  if (!dragging) return;
+  if (!dragging) {
+    canvas.classList.toggle("over-point", !!hitTest(e.clientX, e.clientY));
+    return;
+  }
+  moved = Math.max(moved, Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y));
+  if (moved < 4) return;           // still a click, not a drag
+  canvas.classList.add("dragging");
   const k = 0.008;
   const dx = (e.clientX - last.x) * k;
   const dy = (e.clientY - last.y) * k;
@@ -653,22 +897,33 @@ canvas.addEventListener("pointermove", e => {
   last = { x: e.clientX, y: e.clientY };
 });
 
-const endDrag = () => { dragging = false; canvas.classList.remove("dragging"); };
+function endDrag(e) {
+  if (!dragging) return;
+  dragging = false;
+  canvas.classList.remove("dragging");
+  if (e.type === "pointerup" && moved < 4) {   // a click
+    const h = hitTest(e.clientX, e.clientY);
+    if (h) openInfo(h.id); else closeInfo();
+  }
+}
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
 
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
-  view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0012), 0.55, 2.2);
+  tween = null;
+  view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0012), ZOOM_MIN, ZOOM_MAX);
 }, { passive: false });
 
-canvas.addEventListener("dblclick", () => {
-  view = { ...DEFAULT_VIEW };
-  vel = { yaw: 0, pitch: 0 };
+canvas.addEventListener("dblclick", e => {
+  if (hitTest(e.clientX, e.clientY)) return;
+  closeInfo();
+  animateView({ ...DEFAULT_VIEW }, 550);
 });
 
-function tick() {
-  if (!dragging && (vel.yaw || vel.pitch)) {
+function tick(now) {
+  stepTween(now);
+  if (!dragging && !tween && (vel.yaw || vel.pitch)) {
     view.yaw = clamp(view.yaw + vel.yaw, YAW_MIN, YAW_MAX);
     view.pitch = clamp(view.pitch + vel.pitch, PITCH_MIN, PITCH_MAX);
     // stop momentum when it hits a limit, so it doesn't push against the edge
@@ -682,105 +937,311 @@ function tick() {
   draw();
   requestAnimationFrame(tick);
 }
-tick();
+requestAnimationFrame(tick);
 
 /* =========================================================
-   4. Side panel: add form + list
+   5. Point info window (follows its point as you rotate)
    ========================================================= */
-const addBtn = document.getElementById("addBtn");
-const form = document.getElementById("addForm");
-const cancelBtn = document.getElementById("cancelBtn");
-const fName = document.getElementById("fName");
-const sliders = {
-  cost: [document.getElementById("fCost"), document.getElementById("oCost")],
-  portion: [document.getElementById("fPortion"), document.getElementById("oPortion")],
-  taste: [document.getElementById("fTaste"), document.getElementById("oTaste")],
-};
-const listEl = document.getElementById("list");
-const countEl = document.getElementById("count");
+const info = $("info");
 
-Object.values(sliders).forEach(([input, out]) => {
-  input.addEventListener("input", () => out.textContent = input.value);
+function dotsHtml(v, color) {
+  let h = `<span class="mini-dots" style="--c:${color}">`;
+  for (let i = 1; i <= 10; i++) h += `<i class="${i <= v ? "on" : ""}"></i>`;
+  return h + "</span>";
+}
+
+function openInfo(id) {
+  const p = points.find(q => q.id === id);
+  if (!p) return;
+  selectedId = id;
+  $("infoName").textContent = p.item;
+  $("infoLoc").textContent = p.location;
+  $("infoScores").innerHTML = [
+    ["Cost", p.cost, AXES.x.color],
+    ["Portion size", p.portion, AXES.z.color],
+    ["Taste", p.taste, AXES.y.color],
+  ].map(([n, v, c]) => `<div class="score-row"><span>${n}</span>${dotsHtml(v, c)}<span class="num">${v}/10</span></div>`).join("");
+  $("infoKw").innerHTML = p.keywords.length
+    ? p.keywords.map(k => `<span class="chip">${esc(k)}</span>`).join("")
+    : `<span class="none">No keywords</span>`;
+  info.hidden = false;
+  info.style.animation = "none"; void info.offsetWidth; info.style.animation = "";
+  placeInfo();
+  markListSelection();
+}
+
+function closeInfo() {
+  if (!selectedId && info.hidden) return;
+  selectedId = null;
+  info.hidden = true;
+  markListSelection();
+}
+
+function placeInfo() {
+  if (info.hidden || !selectedId) return;
+  const h = hits.find(x => x.id === selectedId);
+  if (!h) return;
+  const iw = info.offsetWidth, ih = info.offsetHeight;
+  let left = h.x + h.r + 14;
+  if (left + iw > W - 10) left = h.x - h.r - 14 - iw;   // flip to the left side if needed
+  let top = h.y - ih / 2;
+  left = clamp(left, 10, Math.max(10, W - iw - 10));
+  top = clamp(top, 10, Math.max(10, H - ih - 34));
+  info.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+}
+
+$("infoClose").addEventListener("click", closeInfo);
+
+/* =========================================================
+   6. Add form: location suggestions, 0–10 circle ratings, keywords
+   ========================================================= */
+const addBtn = $("addBtn");
+const form = $("addForm");
+const fLoc = $("fLoc");
+const fItem = $("fItem");
+const fKw = $("fKw");
+const suggest = $("suggest");
+const formKwEl = $("formKw");
+
+// ---- circle rating widget ----
+function makeRating(el, outEl, label) {
+  const state = { value: 0 };
+  for (let i = 0; i < 10; i++) el.appendChild(document.createElement("i"));
+  el.tabIndex = 0;
+  el.setAttribute("role", "slider");
+  el.setAttribute("aria-label", label);
+  el.setAttribute("aria-valuemin", "0");
+  el.setAttribute("aria-valuemax", "10");
+
+  const render = () => {
+    [...el.children].forEach((c, i) => c.classList.toggle("on", i < state.value));
+    outEl.textContent = `${state.value} / 10`;
+    el.setAttribute("aria-valuenow", state.value);
+  };
+  const set = v => { state.value = clamp(v, 0, 10); render(); };
+
+  // value comes from where along the bar you click: each circle is one tenth.
+  // Clicking the left edge of the first circle gives 0.
+  const fromX = clientX => {
+    const r = el.getBoundingClientRect();
+    const f = (clientX - r.left) / r.width;
+    return clamp(Math.ceil(f * 10 - 0.35), 0, 10);
+  };
+  let down = false;
+  el.addEventListener("pointerdown", e => { down = true; el.setPointerCapture(e.pointerId); set(fromX(e.clientX)); });
+  el.addEventListener("pointermove", e => { if (down) set(fromX(e.clientX)); });
+  el.addEventListener("pointerup", () => down = false);
+  el.addEventListener("pointercancel", () => down = false);
+  el.addEventListener("keydown", e => {
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") { set(state.value + 1); e.preventDefault(); }
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") { set(state.value - 1); e.preventDefault(); }
+    else if (e.key === "Home") { set(0); e.preventDefault(); }
+    else if (e.key === "End") { set(10); e.preventDefault(); }
+  });
+  render();
+  return { get: () => state.value, set };
+}
+const ratings = {
+  cost: makeRating($("rCost"), $("oCost"), "Cost rating"),
+  portion: makeRating($("rPortion"), $("oPortion"), "Portion size rating"),
+  taste: makeRating($("rTaste"), $("oTaste"), "Taste rating"),
+};
+
+// ---- keyword chips in the form ----
+let placeKw = [];   // keywords that came from the chosen restaurant
+let ownKw = [];     // keywords typed in by hand
+const formKeywords = () => [...new Set([...placeKw, ...ownKw])];
+
+function renderFormKw() {
+  const kws = formKeywords();
+  formKwEl.innerHTML = kws.length
+    ? kws.map(k => `<span class="chip">${esc(k)}<button type="button" data-k="${esc(k)}" aria-label="Remove ${esc(k)}">&times;</button></span>`).join("")
+    : `<span class="none">Pick a restaurant or add your own</span>`;
+}
+formKwEl.addEventListener("click", e => {
+  const b = e.target.closest("button[data-k]");
+  if (!b) return;
+  const k = b.dataset.k;
+  placeKw = placeKw.filter(x => x !== k);
+  ownKw = ownKw.filter(x => x !== k);
+  renderFormKw();
+});
+fKw.addEventListener("keydown", e => {
+  if (e.key === "Enter" || e.key === ",") {
+    e.preventDefault();
+    const k = fKw.value.trim().replace(/,$/, "").toLowerCase();
+    if (k && !formKeywords().includes(k)) ownKw.push(k);
+    fKw.value = "";
+    renderFormKw();
+  }
 });
 
-function resetForm() {
-  fName.value = "";
-  Object.values(sliders).forEach(([input, out]) => { input.value = 5; out.textContent = "5"; });
+// ---- location suggestions ----
+let matches = [], hl = -1;
+function showSuggest() {
+  const q = fLoc.value.trim().toLowerCase();
+  // also suggest locations already used on saved points
+  const used = [...new Set(points.map(p => p.location).filter(Boolean))]
+    .filter(n => !findPlace(n)).map(name => ({ name, keywords: [] }));
+  const all = [...PLACES, ...used];
+  matches = q
+    ? all.filter(p => p.name.toLowerCase().includes(q))
+         .sort((a, b) => a.name.toLowerCase().indexOf(q) - b.name.toLowerCase().indexOf(q))
+    : all;
+  hl = matches.length ? 0 : -1;
+  if (!matches.length) { hideSuggest(); return; }
+  suggest.innerHTML = matches.map((p, i) =>
+    `<li role="option" data-i="${i}" class="${i === hl ? "hl" : ""}">${esc(p.name)}${p.keywords.length ? `<small>${esc(p.keywords.slice(0, 4).join(" · "))}</small>` : ""}</li>`).join("");
+  suggest.hidden = false;
+  fLoc.setAttribute("aria-expanded", "true");
 }
+function hideSuggest() {
+  suggest.hidden = true;
+  fLoc.setAttribute("aria-expanded", "false");
+}
+function moveHl(d) {
+  if (suggest.hidden || !matches.length) return;
+  hl = (hl + d + matches.length) % matches.length;
+  [...suggest.children].forEach((li, i) => li.classList.toggle("hl", i === hl));
+  suggest.children[hl].scrollIntoView({ block: "nearest" });
+}
+function pickPlace(p) {
+  fLoc.value = p.name;          // snaps into the Location bar
+  placeKw = [...p.keywords];    // and brings its keywords with it
+  renderFormKw();
+  hideSuggest();
+  fItem.focus();
+}
+fLoc.addEventListener("input", () => {
+  // typing over a picked restaurant drops its keywords until a new one is chosen
+  if (!findPlace(fLoc.value)) placeKw = [];
+  renderFormKw();
+  showSuggest();
+});
+fLoc.addEventListener("focus", showSuggest);
+fLoc.addEventListener("blur", () => setTimeout(hideSuggest, 120));
+fLoc.addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") { e.preventDefault(); suggest.hidden ? showSuggest() : moveHl(1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); moveHl(-1); }
+  else if (e.key === "Enter") {
+    e.preventDefault();
+    if (!suggest.hidden && matches[hl]) pickPlace(matches[hl]);
+    else fItem.focus();
+  }
+  else if (e.key === "Escape") hideSuggest();
+});
+suggest.addEventListener("mousedown", e => e.preventDefault()); // keep focus while picking
+suggest.addEventListener("click", e => {
+  const li = e.target.closest("li[data-i]");
+  if (li) pickPlace(matches[+li.dataset.i]);
+});
+
+// ---- open / reset / save ----
+function resetForm() {
+  fLoc.value = ""; fItem.value = ""; fKw.value = "";
+  fItem.classList.remove("bad");
+  placeKw = []; ownKw = [];
+  Object.values(ratings).forEach(r => r.set(0));
+  renderFormKw();
+  hideSuggest();
+}
+resetForm();
 
 addBtn.addEventListener("click", () => {
   form.hidden = !form.hidden;
-  if (!form.hidden) fName.focus();
+  if (!form.hidden) fLoc.focus();
 });
-cancelBtn.addEventListener("click", () => { form.hidden = true; resetForm(); });
-
-const saveBtn = document.getElementById("saveBtn");
+$("cancelBtn").addEventListener("click", () => { form.hidden = true; resetForm(); });
 
 function addPoint() {
-  const name = fName.value.trim();
-  if (!name) { fName.focus(); fName.classList.add("bad"); return; }
-  fName.classList.remove("bad");
-  points.push({
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    name,
-    cost: +sliders.cost[0].value,
-    portion: +sliders.portion[0].value,
-    taste: +sliders.taste[0].value,
+  const item = fItem.value.trim();
+  if (!item) { fItem.focus(); fItem.classList.add("bad"); return; }
+  const location = fLoc.value.trim();
+  const known = findPlace(location);
+  const keywords = formKeywords();
+  if (known && !placeKw.length && !keywords.length) keywords.push(...known.keywords);
+  const p = normalize({
+    item,
+    location: known ? known.name : location,
+    cost: ratings.cost.get(),
+    portion: ratings.portion.get(),
+    taste: ratings.taste.get(),
+    keywords,
   });
+  points.push(p);
   savePoints();
   renderList();
   resetForm();
   form.hidden = true;
 }
-saveBtn.addEventListener("click", addPoint);
-fName.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPoint(); } });
-fName.addEventListener("input", () => fName.classList.remove("bad"));
+$("saveBtn").addEventListener("click", addPoint);
+fItem.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPoint(); } });
+fItem.addEventListener("input", () => fItem.classList.remove("bad"));
+
+/* =========================================================
+   7. Foods list
+   ========================================================= */
+const listEl = $("list");
+
+function markListSelection() {
+  [...listEl.querySelectorAll("li.item")].forEach(li => li.classList.toggle("selected", li.dataset.id === selectedId));
+}
 
 function renderList() {
   listEl.innerHTML = "";
-  countEl.textContent = points.length;
+  $("count").textContent = points.length;
   if (!points.length) {
     const li = document.createElement("li");
     li.className = "empty";
-    li.style.border = "none"; li.style.background = "none";
     li.textContent = "No foods yet — add one!";
     listEl.appendChild(li);
     return;
   }
   points.forEach(p => {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="dot"></span><span class="name"></span>
-      <span class="vals">$${p.cost} · ${p.portion} · ${p.taste}</span>
-      <button class="del" title="Remove">&times;</button>`;
-    li.querySelector(".name").textContent = p.name;
-    li.querySelector(".name").title = p.name;
-    li.addEventListener("mouseenter", () => { activeId = p.id; li.classList.add("active"); });
-    li.addEventListener("mouseleave", () => { activeId = null; li.classList.remove("active"); });
+    li.className = "item";
+    li.dataset.id = p.id;
+    li.tabIndex = 0;
+    li.innerHTML = `<span class="dot"></span>
+      <span class="txt"><span class="name"></span><span class="where"></span></span>
+      <span class="vals" title="Cost · Portion · Taste">${p.cost} · ${p.portion} · ${p.taste}</span>
+      <button class="del" type="button" title="Remove">&times;</button>`;
+    li.querySelector(".name").textContent = p.item;
+    li.querySelector(".name").title = p.item;
+    li.querySelector(".where").textContent = p.location;
+    li.addEventListener("mouseenter", () => { hoverId = p.id; li.classList.add("active"); });
+    li.addEventListener("mouseleave", () => { hoverId = null; li.classList.remove("active"); });
+    li.addEventListener("click", e => { if (!e.target.closest(".del")) focusPoint(p.id); });
+    li.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === li) focusPoint(p.id); });
     li.querySelector(".del").addEventListener("click", () => {
       points = points.filter(q => q.id !== p.id);
-      activeId = null;
+      if (selectedId === p.id) closeInfo();
+      hoverId = null;
       savePoints();
       renderList();
     });
     listEl.appendChild(li);
   });
+  markListSelection();
 }
 renderList();
 
 /* =========================================================
-   5. Version + fixes log
+   8. Version + fixes log
    ========================================================= */
-const escHtml = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-const $id = id => document.getElementById(id);
-$id("verLabel").textContent = `Food Plotter ${VERSION}`;
-$id("fixesList").innerHTML = CHANGELOG.map((c, i) =>
-  `<section class="fx"><h4>Version ${escHtml(c.v)}${i === 0 ? ' <span class="cur">current</span>' : ''}<span class="fxd">${escHtml(c.d)}</span></h4><ul>${c.n.map(x => `<li>${escHtml(x)}</li>`).join("")}</ul></section>`).join("");
-const openFixes = () => { $id("fixesModal").hidden = false; $id("fixesClose").focus(); };
-const closeFixes = () => { $id("fixesModal").hidden = true; $id("fixesBtn").focus(); };
-$id("fixesBtn").addEventListener("click", openFixes);
-$id("fixesClose").addEventListener("click", closeFixes);
-$id("fixesModal").addEventListener("click", e => { if (e.target === $id("fixesModal")) closeFixes(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape" && !$id("fixesModal").hidden) closeFixes(); });
+$("verLabel").textContent = `Food Plotter ${VERSION}`;
+$("fixesList").innerHTML = CHANGELOG.map((c, i) =>
+  `<section class="fx"><h4>Version ${esc(c.v)}${i === 0 ? ' <span class="cur">current</span>' : ''}<span class="fxd">${esc(c.d)}</span></h4><ul>${c.n.map(x => `<li>${esc(x)}</li>`).join("")}</ul></section>`).join("");
+const openFixes = () => { $("fixesModal").hidden = false; $("fixesClose").focus(); };
+const closeFixes = () => { $("fixesModal").hidden = true; $("fixesBtn").focus(); };
+$("fixesBtn").addEventListener("click", openFixes);
+$("fixesClose").addEventListener("click", closeFixes);
+$("fixesModal").addEventListener("click", e => { if (e.target === $("fixesModal")) closeFixes(); });
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (!$("fixesModal").hidden) closeFixes();
+  else if (!info.hidden) closeInfo();
+});
 </script>
 </body>
 </html>
