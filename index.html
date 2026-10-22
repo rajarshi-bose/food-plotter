@@ -187,11 +187,11 @@
   .chip button { border: none; background: none; cursor: pointer; color: inherit; opacity: .6; font-size: 13px; line-height: 1; padding: 0 0 0 2px; }
   .chip button:hover { opacity: 1; }
   .chips .none { font-size: 12px; color: var(--muted); }
-  .chip.type { background: var(--ink); color: #fff; font-weight: 600; }
   .pick-group { display: flex; flex-direction: column; gap: 5px; }
   .pick-group .pick-label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
   .pick-group .note { font-weight: 400; font-size: 11.5px; color: var(--muted); }
-  .kw-pick button.type-on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .pick-group.bad .pick-label { color: var(--red); }
+  .pick-group .pick-label .opt { text-transform: none; letter-spacing: 0; font-weight: 400; }
 
   /* ---------- side panel ---------- */
   .panel {
@@ -286,9 +286,6 @@
   .rating i.on { background: var(--c); }
   .rating:hover i { transform: scale(1.04); }
 
-  .type-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-  .type-chips:empty { display: none; }
-  .type-chips .chip button { color: #fff; }
   .field .hint-line { font-weight: 400; font-size: 11.5px; color: var(--muted); }
 
   .form-actions { display: flex; gap: 8px; }
@@ -581,8 +578,10 @@
       <div class="scores" id="infoScores"></div>
       <div class="kw-head">Food type</div>
       <div class="chips" id="infoType"></div>
-      <div class="kw-head">Cuisine &amp; style</div>
-      <div class="chips" id="infoKw"></div>
+      <div class="kw-head">Cuisine</div>
+      <div class="chips" id="infoCuisine"></div>
+      <div class="kw-head">Style</div>
+      <div class="chips" id="infoStyle"></div>
     </div>
     <div class="plot-tools">
       <button class="stats-btn" id="statsBtn" type="button" aria-expanded="false" aria-controls="drawer">
@@ -612,13 +611,6 @@
         <input type="text" id="fItem" maxlength="60" placeholder="e.g. Burrito bowl" autocomplete="off">
       </div>
       <div class="field">
-        <label for="fType">Food type <span class="opt">(pick one or more)</span></label>
-        <div class="type-chips" id="typeChips"></div>
-        <input type="text" id="fType" maxlength="30" placeholder="e.g. tea, drink" autocomplete="off"
-               role="combobox" aria-expanded="false" aria-controls="typeSuggest" aria-autocomplete="list">
-        <ul class="suggest" id="typeSuggest" role="listbox" hidden></ul>
-      </div>
-      <div class="field">
         <span class="rating-head">Cost <output id="oCost">0 / 10</output></span>
         <div class="rating" id="rCost" style="--c: var(--c-cost)"></div>
       </div>
@@ -630,6 +622,10 @@
         <span class="rating-head">Taste <output id="oTaste">0 / 10</output></span>
         <div class="rating" id="rTaste" style="--c: var(--c-taste)"></div>
       </div>
+      <div class="pick-group" id="typeGroup">
+        <span class="pick-label">Food type <span class="opt">· pick one or more</span></span>
+        <div class="kw-pick" id="formTypes"></div>
+      </div>
       <div class="pick-group">
         <span class="pick-label">Cuisine</span>
         <div class="kw-pick" id="formCuisine"></div>
@@ -637,7 +633,7 @@
       <div class="pick-group">
         <span class="pick-label">Style</span>
         <div class="kw-pick" id="formStyle"></div>
-        <span class="note" id="pickNote">Picking a location fills these in. Tap to change.</span>
+        <span class="note" id="pickNote">Picking a location fills in cuisine and style. Tap any chip to change.</span>
       </div>
       <div class="field">
         <label for="fName">Your name <span class="opt">(optional)</span></label>
@@ -676,6 +672,10 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.11", d: "Oct 22, 2026", n: [
+    "Food type is picked with the same tap-to-toggle chips as cuisine and style",
+    "The details window shows food type, cuisine and style as matching rows of chips",
+    "Every food gets its own pixel tile pattern in its restaurant's colors"] },
   { v: "1.10", d: "Oct 22, 2026", n: [
     "Food type is now multi-select, so a Thai milk tea can be both tea and drink",
     "The Foods list is grouped by restaurant",
@@ -879,12 +879,13 @@ const FALLBACK_SETS = [
 function hashStr(t) { let h = 2166136261; for (const c of String(t)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 function rng(seed) { return () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const tileCache = new Map();
-function pixelTile(name) {
+function pixelTile(name, seed = "") {
   const key = name || "No location";
-  if (tileCache.has(key)) return tileCache.get(key);
+  const cacheKey = key + "|" + seed;
+  if (tileCache.has(cacheKey)) return tileCache.get(cacheKey);
   const h = hashStr(key.toLowerCase());
   const colors = BRAND_COLORS[key] || FALLBACK_SETS[h % FALLBACK_SETS.length];
-  const rand = rng(h);
+  const rand = rng(seed ? hashStr(seed) : h);   // same colors, different noise per food
   // first color dominates; the rest are sprinkled in as noise
   const weights = colors.map((_, i) => i === 0 ? 0.55 : 0.45 / (colors.length - 1));
   let rects = "";
@@ -894,7 +895,7 @@ function pixelTile(name) {
     rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[i]}"/>`;
   }
   const svg = `<span class="tile" aria-hidden="true"><svg viewBox="0 0 5 5" shape-rendering="crispEdges">${rects}</svg></span>`;
-  tileCache.set(key, svg);
+  tileCache.set(cacheKey, svg);
   return svg;
 }
 
@@ -1408,11 +1409,10 @@ function openInfo(id) {
     ["Portion size", p.portion, AXES.z.color],
     ["Taste", p.taste, AXES.y.color],
   ].map(([n, v, c]) => `<div class="score-row"><span>${n}</span>${dotsHtml(v, c)}<span class="num">${v}/10</span></div>`).join("");
-  $("infoType").innerHTML = p.types.length ? p.types.map(t => `<span class="chip type">${esc(t)}</span>`).join("") : `<span class="none">Not set</span>`;
-  const tags = [...p.cuisine, ...p.style];
-  $("infoKw").innerHTML = tags.length
-    ? tags.map(k => `<span class="chip">${esc(k)}</span>`).join("")
-    : `<span class="none">None</span>`;
+  const chipRow = list => list.length ? list.map(k => `<span class="chip">${esc(k)}</span>`).join("") : `<span class="none">None</span>`;
+  $("infoType").innerHTML = chipRow(p.types);
+  $("infoCuisine").innerHTML = chipRow(p.cuisine);
+  $("infoStyle").innerHTML = chipRow(p.style);
   const already = wasOpen;
   info.dataset.id = id;
   info.hidden = false;
@@ -1452,7 +1452,6 @@ const addBtn = $("addBtn");
 const form = $("addForm");
 const fLoc = $("fLoc");
 const fItem = $("fItem");
-const fType = $("fType");
 
 // ---- circle rating widget ----
 function makeRating(el, outEl, label) {
@@ -1498,27 +1497,32 @@ const ratings = {
   taste: makeRating($("rTaste"), $("oTaste"), "Taste rating"),
 };
 
-// ---- cuisine + style pickers ----
-const pickCuisine = new Set(), pickStyle = new Set();
+// ---- food type, cuisine + style pickers (same tap-to-toggle chips) ----
+const pickTypes = new Set(), pickCuisine = new Set(), pickStyle = new Set();
 function renderPickers() {
+  // keep any older custom type on a food being edited visible as a chip
+  const typeList = [...FOOD_TYPES, ...[...pickTypes].filter(t => !FOOD_TYPES.includes(t))];
   const chips = (list, set) => list.map(k =>
-    `<button type="button" data-k="${k}" class="${set.has(k) ? "on" : ""}" aria-pressed="${set.has(k)}">${k}</button>`).join("");
+    `<button type="button" data-k="${esc(k)}" class="${set.has(k) ? "on" : ""}" aria-pressed="${set.has(k)}">${esc(k)}</button>`).join("");
+  $("formTypes").innerHTML = chips(typeList, pickTypes);
   $("formCuisine").innerHTML = chips(CUISINES, pickCuisine);
   $("formStyle").innerHTML = chips(STYLES, pickStyle);
 }
-[["formCuisine", pickCuisine], ["formStyle", pickStyle]].forEach(([id, set]) =>
+[["formTypes", pickTypes], ["formCuisine", pickCuisine], ["formStyle", pickStyle]].forEach(([id, set]) =>
   $(id).addEventListener("click", e => {
     const b = e.target.closest("button[data-k]"); if (!b) return;
     set.has(b.dataset.k) ? set.delete(b.dataset.k) : set.add(b.dataset.k);
+    if (set === pickTypes) $("typeGroup").classList.remove("bad");
     renderPickers();
   }));
+function setTypes(list) { pickTypes.clear(); list.slice(0, 5).forEach(t => pickTypes.add(t)); renderPickers(); }
 function setPicks(cuisine, style) {
   pickCuisine.clear(); cuisine.forEach(k => pickCuisine.add(k));
   pickStyle.clear(); style.forEach(k => pickStyle.add(k));
   renderPickers();
 }
 
-// ---- a small autocomplete used by Location and Food type ----
+// ---- a small autocomplete used by Location ----
 function makeCombo(input, list, getOptions, onPick) {
   let matches = [], hl = -1;
   const hide = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); };
@@ -1574,43 +1578,6 @@ const locCombo = makeCombo(fLoc, $("suggest"), () => {
 });
 fLoc.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); fItem.focus(); } });
 
-// Food type: what the item itself is. Several allowed (a Thai milk tea is a tea and a drink).
-const pickTypes = [];
-function renderTypeChips() {
-  $("typeChips").innerHTML = pickTypes.map(t =>
-    `<span class="chip type">${esc(t)}<button type="button" data-t="${esc(t)}" aria-label="Remove ${esc(t)}">&times;</button></span>`).join("");
-  fType.placeholder = pickTypes.length ? "Add another (optional)" : "e.g. tea, drink";
-}
-function addType(t) {
-  t = String(t).trim().toLowerCase().slice(0, 30);
-  if (t && !pickTypes.includes(t) && pickTypes.length < 5) pickTypes.push(t);
-  fType.value = ""; fType.classList.remove("bad");
-  renderTypeChips();
-}
-function setTypes(list) { pickTypes.length = 0; list.forEach(addType); renderTypeChips(); }
-$("typeChips").addEventListener("click", e => {
-  const b = e.target.closest("button[data-t]"); if (!b) return;
-  pickTypes.splice(pickTypes.indexOf(b.dataset.t), 1);
-  renderTypeChips(); fType.focus();
-});
-const typeCombo = makeCombo(fType, $("typeSuggest"), () => {
-  const counts = new Map();
-  points.forEach(p => p.types.forEach(t => counts.set(t, (counts.get(t) || 0) + 1)));
-  const extra = [...counts.keys()].filter(t => !FOOD_TYPES.includes(t));
-  return [...FOOD_TYPES, ...extra].filter(t => !pickTypes.includes(t))
-    .map(t => ({ label: t, sub: counts.get(t) ? `${counts.get(t)} on the plot` : "" }));
-}, o => { addType(o.label); setTimeout(() => fType.focus(), 0); });
-fType.addEventListener("input", () => fType.classList.remove("bad"));
-fType.addEventListener("keydown", e => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    if (fType.value.trim()) addType(fType.value);   // a type that isn't in the list
-    else addPoint();
-  } else if (e.key === "Backspace" && !fType.value && pickTypes.length) {
-    pickTypes.pop(); renderTypeChips();
-  }
-});
-
 // ---- open / reset / save ----
 const fName = $("fName");
 const NAME_KEY = "foodPlotter.name";
@@ -1626,14 +1593,14 @@ function setMode(id) {
 
 function resetForm() {
   setMode(null);
-  fLoc.value = ""; fItem.value = ""; fType.value = "";
+  fLoc.value = ""; fItem.value = "";
   try { fName.value = localStorage.getItem(NAME_KEY) || ""; } catch (e) { fName.value = ""; }
-  fItem.classList.remove("bad"); fType.classList.remove("bad");
+  fItem.classList.remove("bad"); $("typeGroup").classList.remove("bad");
   setTypes([]);
   setPicks([], []);
   $("formErr").hidden = true;
   Object.values(ratings).forEach(r => r.set(0));
-  locCombo.hide(); typeCombo.hide();
+  locCombo.hide();
 }
 resetForm();
 
@@ -1667,8 +1634,13 @@ async function addPoint() {
   if (saving) return;
   const item = fItem.value.trim();
   if (!item) { fItem.focus(); fItem.classList.add("bad"); return; }
-  if (fType.value.trim()) addType(fType.value);   // typed but not yet added
-  if (!pickTypes.length) { fType.focus(); fType.classList.add("bad"); return; }
+  if (!pickTypes.size) {
+    $("typeGroup").classList.add("bad");
+    $("formErr").textContent = "Pick at least one food type.";
+    $("formErr").hidden = false;
+    $("typeGroup").scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+    return;
+  }
   const location = fLoc.value.trim();
   const known = findPlace(location);
   // typed a known restaurant without picking it from the list: still use its tags
@@ -1679,7 +1651,7 @@ async function addPoint() {
     cost: ratings.cost.get(),
     portion: ratings.portion.get(),
     taste: ratings.taste.get(),
-    types: [...pickTypes],
+    types: [...pickTypes].slice(0, 5),
     cuisine: [...pickCuisine],
     style: [...pickStyle],
     author: fName.value,
@@ -1748,7 +1720,7 @@ function foodRow(p) {
     if (!passes(p)) li.title = "Hidden by the current filter";
     li.dataset.id = p.id;
     li.tabIndex = 0;
-    li.innerHTML = `${pixelTile(p.location)}
+    li.innerHTML = `${pixelTile(p.location, p.id)}
       <span class="txt"><span class="name"></span><span class="where"></span></span>
       <span class="vals" title="Cost · Portion · Taste">${p.cost} · ${p.portion} · ${p.taste}</span>
       ${p.uid && p.uid === myUid ? `<button class="del" type="button" title="Delete your food">&times;</button>` : ""}`;
@@ -1832,7 +1804,7 @@ function renderTools() {
     if (!c.length) return "";
     return `<div class="pick-group"><span class="pick-label">${title}</span>
       <div class="kw-pick" data-group="${key}">${c.map(([v, n]) =>
-        `<button type="button" data-k="${esc(v)}" class="${sel[key].has(v) ? (key === "types" ? "type-on" : "on") : ""}" aria-pressed="${sel[key].has(v)}">${esc(v)}<span>${n}</span></button>`).join("")}</div></div>`;
+        `<button type="button" data-k="${esc(v)}" class="${sel[key].has(v) ? "on" : ""}" aria-pressed="${sel[key].has(v)}">${esc(v)}<span>${n}</span></button>`).join("")}</div></div>`;
   };
   const groupsHtml = group("types", "Food type") + group("cuisine", "Cuisine") + group("style", "Style");
   const filterCard = `<div class="tool">
