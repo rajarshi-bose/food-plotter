@@ -149,15 +149,24 @@
   }
   .info[hidden] { display: none; }
   @keyframes infoIn { from { opacity: 0; transform: translateY(4px); } }
+  .info-tools { position: absolute; top: 6px; right: 7px; display: flex; gap: 2px; }
+  .info-edit {
+    border: none; background: none; cursor: pointer;
+    color: var(--muted); padding: 3px; border-radius: 6px; display: grid; place-items: center;
+  }
+  .info-edit[hidden] { display: none; }
+  .info-edit svg { width: 15px; height: 15px; }
+  .info-edit:hover, .info-edit:focus-visible { color: var(--blue); background: #eef1fb; }
   .info-close {
-    position: absolute; top: 6px; right: 7px;
     border: none; background: none; cursor: pointer;
     font-size: 18px; line-height: 1; color: var(--muted); padding: 2px 4px;
   }
   .info-close:hover { color: var(--ink); }
-  .info h3 { font-size: 17px; font-weight: 700; line-height: 1.2; padding-right: 18px; }
+  .info h3 { font-size: 17px; font-weight: 700; line-height: 1.2; padding-right: 44px; }
   .info .loc { font-size: 13px; color: var(--muted); margin-top: 2px; }
   .info .loc:empty { display: none; }
+  .info .by { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .info .by svg { width: 13px; height: 13px; flex: none; }
   .info .scores { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
   .score-row { display: grid; grid-template-columns: 76px auto 1fr; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
   .score-row .num { text-align: right; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
@@ -226,6 +235,9 @@
     flex: none;
   }
   .add-form[hidden] { display: none; }
+  .form-title { font-family: Silkscreen, monospace; font-size: 13px; display: flex; justify-content: space-between; align-items: baseline; }
+  .form-title small { font: 400 11.5px "Schibsted Grotesk", sans-serif; color: var(--muted); }
+  .field .opt { font-weight: 400; color: var(--muted); }
   .field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; position: relative; }
   .field input[type="text"] {
     font: inherit; font-weight: 400;
@@ -421,9 +433,15 @@
   <div class="card plot-card" id="plotCard">
     <canvas id="plot"></canvas>
     <div class="info" id="info" hidden role="dialog" aria-labelledby="infoName">
-      <button class="info-close" id="infoClose" type="button" aria-label="Close">&times;</button>
+      <div class="info-tools">
+        <button class="info-edit" id="infoEdit" type="button" aria-label="Edit this food" title="Edit" hidden>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M11.2 2.3l2.5 2.5-8.2 8.2-3.1.6.6-3.1z"/><path d="M9.6 3.9l2.5 2.5"/></svg>
+        </button>
+        <button class="info-close" id="infoClose" type="button" aria-label="Close">&times;</button>
+      </div>
       <h3 id="infoName"></h3>
       <div class="loc" id="infoLoc"></div>
+      <div class="by"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5c0-3.2 2.7-5 6-5s6 1.8 6 5z"/></svg><span id="infoBy"></span></div>
       <div class="scores" id="infoScores"></div>
       <div class="kw-head">Keywords</div>
       <div class="chips" id="infoKw"></div>
@@ -442,6 +460,7 @@
     <button class="add-btn" id="addBtn" type="button">+ Add point</button>
 
     <div class="add-form" id="addForm" hidden>
+      <div class="form-title"><span id="formTitle">New food</span><small id="formSub"></small></div>
       <div class="field">
         <label for="fLoc">Location</label>
         <input type="text" id="fLoc" maxlength="60" placeholder="e.g. Chipotle" autocomplete="off"
@@ -469,6 +488,10 @@
         <div class="chips" id="formKw"></div>
         <input type="text" id="fKw" maxlength="30" placeholder="Add a keyword, press Enter" autocomplete="off">
       </div>
+      <div class="field">
+        <label for="fName">Your name <span class="opt">(optional)</span></label>
+        <input type="text" id="fName" maxlength="40" placeholder="Shown as Anonymous user if blank" autocomplete="nickname">
+      </div>
       <div class="notice err" id="formErr" hidden></div>
       <div class="form-actions">
         <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
@@ -495,6 +518,9 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.6", d: "Oct 22, 2026", n: [
+    "Edit your own foods: open one from the list or the plot and tap the pencil",
+    "Add your name when adding a food; the details window shows who added it, or Anonymous user"] },
   { v: "1.5", d: "Oct 22, 2026", n: [
     "Foods are now shared: anyone can add one, and everyone sees every addition live",
     "Only the person who added a food can delete it",
@@ -666,6 +692,7 @@ function normalize(p, id) {
     portion: clamp(Math.round(+p.portion || 0), 0, 10),
     taste: clamp(Math.round(+p.taste || 0), 0, 10),
     keywords: toList(p.keywords).map(k => String(k).slice(0, 30)).filter(Boolean).slice(0, 20),
+    author: String(p.author ?? "").trim().slice(0, 40),
     uid: p.uid || null,
     createdAt: +p.createdAt || 0,
   };
@@ -702,6 +729,8 @@ function startFirebase() {
     points = next;
     loaded = true; readError = null;
     if (selectedId && !points.some(p => p.id === selectedId)) closeInfo();
+    else if (selectedId) openInfo(selectedId);
+    if (editingId && !points.some(p => p.id === editingId)) { resetForm(); form.hidden = true; }
     renderList(); setLive();
   }, err => {
     readError = err && err.code === "PERMISSION_DENIED"
@@ -710,7 +739,11 @@ function startFirebase() {
     loaded = true; setLive(); renderList();
   });
 
-  app.auth().onAuthStateChanged(u => { myUid = u ? u.uid : null; renderList(); updateLocalNotice(); });
+  app.auth().onAuthStateChanged(u => {
+    myUid = u ? u.uid : null;
+    renderList(); updateLocalNotice();
+    if (selectedId) openInfo(selectedId);
+  });
   app.auth().signInAnonymously().catch(() => { myUid = null; });
 }
 
@@ -722,17 +755,22 @@ async function ensureUser() {
   return myUid;
 }
 
-async function saveReview(p) {
+// adds a new review, or (with id) updates one of your own
+async function saveReview(p, id = null) {
   const uid = await ensureUser();
-  const ref = db.ref("reviews").push();
-  await ref.set({
+  const fields = {
     item: p.item,
     location: p.location || null,          // empty fields are left out
     keywords: p.keywords.length ? p.keywords : null,
+    author: p.author || null,
     cost: p.cost, portion: p.portion, taste: p.taste,
-    uid,
-    createdAt: firebase.database.ServerValue.TIMESTAMP,
-  });
+  };
+  if (id) {
+    await db.ref("reviews/" + id).update({ ...fields, updatedAt: firebase.database.ServerValue.TIMESTAMP });
+    return id;
+  }
+  const ref = db.ref("reviews").push();
+  await ref.set({ ...fields, uid, createdAt: firebase.database.ServerValue.TIMESTAMP });
   return ref.key;
 }
 
@@ -1089,9 +1127,12 @@ function dotsHtml(v, color) {
 function openInfo(id) {
   const p = points.find(q => q.id === id);
   if (!p) return;
+  const wasOpen = !info.hidden && info.dataset.id === id;
   selectedId = id;
   $("infoName").textContent = p.item;
   $("infoLoc").textContent = p.location;
+  $("infoBy").textContent = p.author || "Anonymous user";
+  $("infoEdit").hidden = !(p.uid && p.uid === myUid);
   $("infoScores").innerHTML = [
     ["Cost", p.cost, AXES.x.color],
     ["Portion size", p.portion, AXES.z.color],
@@ -1100,8 +1141,10 @@ function openInfo(id) {
   $("infoKw").innerHTML = p.keywords.length
     ? p.keywords.map(k => `<span class="chip">${esc(k)}</span>`).join("")
     : `<span class="none">No keywords</span>`;
+  const already = wasOpen;
+  info.dataset.id = id;
   info.hidden = false;
-  info.style.animation = "none"; void info.offsetWidth; info.style.animation = "";
+  if (!already) { info.style.animation = "none"; void info.offsetWidth; info.style.animation = ""; }
   placeInfo();
   markListSelection();
 }
@@ -1127,6 +1170,7 @@ function placeInfo() {
 }
 
 $("infoClose").addEventListener("click", closeInfo);
+$("infoEdit").addEventListener("click", () => { if (selectedId) openEdit(selectedId); });
 
 /* =========================================================
    6. Add form: location suggestions, 0–10 circle ratings, keywords
@@ -1273,8 +1317,22 @@ suggest.addEventListener("click", e => {
 });
 
 // ---- open / reset / save ----
+const fName = $("fName");
+const NAME_KEY = "foodPlotter.name";
+let editingId = null;   // set while editing one of your own foods
+
+function setMode(id) {
+  editingId = id;
+  $("formTitle").textContent = id ? "Edit food" : "New food";
+  $("formSub").textContent = id ? "Only you can edit this" : "";
+  $("saveBtn").textContent = id ? "Save" : "Add";
+  addBtn.textContent = "+ Add point";
+}
+
 function resetForm() {
+  setMode(null);
   fLoc.value = ""; fItem.value = ""; fKw.value = "";
+  try { fName.value = localStorage.getItem(NAME_KEY) || ""; } catch (e) { fName.value = ""; }
   fItem.classList.remove("bad");
   placeKw = []; ownKw = [];
   $("formErr").hidden = true;
@@ -1285,9 +1343,28 @@ function resetForm() {
 resetForm();
 
 addBtn.addEventListener("click", () => {
+  if (editingId) { resetForm(); form.hidden = false; fLoc.focus(); return; }  // switch from editing to a new food
   form.hidden = !form.hidden;
   if (!form.hidden) fLoc.focus();
 });
+
+function openEdit(id) {
+  const p = points.find(q => q.id === id);
+  if (!p || !(p.uid && p.uid === myUid)) return;
+  resetForm();
+  setMode(id);
+  fLoc.value = p.location;
+  fItem.value = p.item;
+  fName.value = p.author;
+  ratings.cost.set(p.cost);
+  ratings.portion.set(p.portion);
+  ratings.taste.set(p.taste);
+  placeKw = []; ownKw = [...p.keywords];
+  renderFormKw();
+  form.hidden = false;
+  form.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+  fItem.focus();
+}
 $("cancelBtn").addEventListener("click", () => { form.hidden = true; resetForm(); });
 
 let saving = false;
@@ -1306,23 +1383,28 @@ async function addPoint() {
     portion: ratings.portion.get(),
     taste: ratings.taste.get(),
     keywords,
+    author: fName.value,
   });
+  try { localStorage.setItem(NAME_KEY, p.author); } catch (e) {}
   const btn = $("saveBtn"), err = $("formErr");
   err.hidden = true;
   saving = true; btn.disabled = true; btn.textContent = "Saving…";
+  const wasEditing = editingId;
   try {
-    await saveReview(p);         // the live listener adds it to the plot for everyone
+    await saveReview(p, editingId);   // the live listener updates the plot for everyone
     resetForm();
     form.hidden = true;
+    if (wasEditing && selectedId === wasEditing) openInfo(wasEditing);  // refresh the open window
   } catch (e) {
     err.textContent = writeErrorText(e);
     err.hidden = false;
   } finally {
-    saving = false; btn.disabled = false; btn.textContent = "Add";
+    saving = false; btn.disabled = false; btn.textContent = editingId ? "Save" : "Add";
   }
 }
 $("saveBtn").addEventListener("click", addPoint);
 fItem.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPoint(); } });
+fName.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPoint(); } });
 fItem.addEventListener("input", () => fItem.classList.remove("bad"));
 
 /* =========================================================

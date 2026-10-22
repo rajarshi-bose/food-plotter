@@ -6,18 +6,20 @@
       ".read": true,
       ".indexOn": ["createdAt"],
       "$id": {
-        ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('uid').val() === auth.uid))",
+        ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.exists() && data.child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)))",
         ".validate": "newData.hasChildren(['item', 'cost', 'portion', 'taste', 'uid', 'createdAt'])",
-        "item":     { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
-        "location": { ".validate": "newData.isString() && newData.val().length <= 60" },
-        "cost":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
-        "portion":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
-        "taste":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
+        "item":      { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+        "location":  { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "author":    { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "cost":      { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
+        "portion":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
+        "taste":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
         "keywords": {
           "$k": { ".validate": "$k.matches(/^(1?[0-9])$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 30" }
         },
         "uid":       { ".validate": "newData.val() === auth.uid" },
-        "createdAt": { ".validate": "newData.val() === now" },
+        "createdAt": { ".validate": "(!data.exists() && newData.val() === now) || (data.exists() && newData.val() === data.val())" },
+        "updatedAt": { ".validate": "newData.val() === now" },
         "$other":    { ".validate": false }
       }
     }
