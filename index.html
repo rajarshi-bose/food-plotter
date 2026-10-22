@@ -498,6 +498,39 @@
   .list li.item.out { opacity: .38; }
   .list li.item.out .tile { filter: grayscale(1); opacity: .6; }
 
+  /* ---------- admin ---------- */
+  .ver-btn.admin-on { background: var(--red); border-color: var(--red); color: #fff; }
+  .admin-box {
+    width: min(440px, 100%);
+    background: #fff; border: 2px solid var(--ink); border-radius: 14px;
+    box-shadow: 6px 6px 0 var(--ink);
+    padding: 18px 22px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+    font-size: 13.5px; line-height: 1.45;
+  }
+  .admin-box p { color: var(--ink); }
+  .admin-box .muted { color: var(--muted); font-size: 12.5px; }
+  .admin-box ol { padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .admin-box code {
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #f1eee6; border-radius: 5px; padding: 2px 5px; word-break: break-all;
+  }
+  .admin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .admin-actions button {
+    font: 600 13px "Schibsted Grotesk", sans-serif;
+    padding: 8px 13px; border-radius: 8px; cursor: pointer;
+    border: 2px solid var(--ink); background: #fff; color: var(--ink);
+  }
+  .admin-actions button.primary { background: var(--ink); color: #fff; }
+  .admin-actions button.danger { background: var(--red); border-color: var(--red); color: #fff; }
+  .admin-err { color: #b8381d; font-size: 12.5px; }
+  .admin-err:empty { display: none; }
+  .switch { display: flex; align-items: center; gap: 9px; font-weight: 600; cursor: pointer; }
+  .switch input { width: 16px; height: 16px; accent-color: var(--red); }
+  .list .del.admin { color: var(--red); }
+  .info-del { color: var(--muted); }
+  .info-del:hover, .info-del:focus-visible { color: var(--red) !important; background: #fde9e4 !important; }
+
   /* ---------- version + fixes log ---------- */
   .ver-row {
     position: fixed; right: 18px; bottom: 10px; z-index: 32;
@@ -569,6 +602,9 @@
       <div class="info-tools">
         <button class="info-edit" id="infoEdit" type="button" aria-label="Edit this food" title="Edit" hidden>
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M11.2 2.3l2.5 2.5-8.2 8.2-3.1.6.6-3.1z"/><path d="M9.6 3.9l2.5 2.5"/></svg>
+        </button>
+        <button class="info-edit info-del" id="infoDel" type="button" aria-label="Delete this food" title="Delete" hidden>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 9h6.6l.7-9M6.7 7v4.5M9.3 7v4.5"/></svg>
         </button>
         <button class="info-close" id="infoClose" type="button" aria-label="Close">&times;</button>
       </div>
@@ -659,7 +695,12 @@
   <div class="tools" id="tools"></div>
 </section>
 
-<div class="ver-row"><span class="ver" id="verLabel">Food Plotter</span><button class="ver-btn" id="fixesBtn" type="button">Fixes</button></div>
+<div class="ver-row"><span class="ver" id="verLabel">Food Plotter</span><button class="ver-btn" id="adminBtn" type="button">Admin</button><button class="ver-btn" id="fixesBtn" type="button">Fixes</button></div>
+
+<div class="overlay" id="adminModal" hidden><div class="admin-box" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+  <div class="fixes-head"><h3 id="adminTitle" style="font-family:Silkscreen,monospace;font-weight:400;font-size:18px">Admin</h3><button class="ver-btn" id="adminClose" type="button">Close</button></div>
+  <div id="adminBody"></div>
+</div></div>
 
 <div class="overlay" id="fixesModal" hidden><div class="fixes" role="dialog" aria-modal="true" aria-labelledby="fixesTitle">
   <div class="fixes-head"><h3 id="fixesTitle">Fixes</h3><button class="ver-btn" id="fixesClose" type="button">Close</button></div>
@@ -672,6 +713,10 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.15", d: "Oct 22, 2026", n: [
+    "New Admin button next to Fixes: the site owner can sign in with Google and delete any food",
+    "A trash button in the details window for foods you're allowed to delete",
+    "Carport Coffee's tile now uses light blue and white"] },
   { v: "1.14", d: "Oct 22, 2026", n: ["Added Carport Coffee (College Station) to the location suggestions"] },
   { v: "1.13", d: "Oct 22, 2026", n: [
     "The selected point turns red with a soft glow",
@@ -878,6 +923,7 @@ const BRAND_COLORS = {
   "Pizza Hut": ["#ee3a43", "#1d1b1b", "#ffffff"],
   "Panera Bread": ["#4b7a3a", "#f1e9d2"],
   "Starbucks": ["#00704a", "#ffffff", "#1e3932"],
+  "Carport Coffee": ["#8cc9ea", "#ffffff", "#bfe2f4"],
 };
 const FALLBACK_SETS = [
   ["#2a4fd6", "#f0a800", "#ffffff"], ["#189a6c", "#ec5a3a", "#ffffff"], ["#ec5a3a", "#f0a800", "#1d1b26"],
@@ -989,11 +1035,12 @@ function startFirebase() {
   });
 
   app.auth().onAuthStateChanged(u => {
-    myUid = u ? u.uid : null;
+    if (!u) { app.auth().signInAnonymously().catch(() => { myUid = null; }); return; }  // everyone gets an ID
+    myUid = u.uid;
+    checkAdmin();
     renderList();
     if (selectedId) openInfo(selectedId);
   });
-  app.auth().signInAnonymously().catch(() => { myUid = null; });
 }
 
 async function ensureUser() {
@@ -1002,6 +1049,114 @@ async function ensureUser() {
   const cred = await firebase.auth().signInAnonymously();
   myUid = cred.user.uid;
   return myUid;
+}
+
+/* ---------- admin ----------
+   The admin signs in with Google. The database rules only let a UID listed
+   under /admins delete other people's foods, so the button itself grants nothing. */
+let isAdmin = false, adminOn = true, adminErr = "";
+const mine = p => !!(p.uid && p.uid === myUid);
+const canDelete = p => mine(p) || (isAdmin && adminOn);
+
+function checkAdmin() {
+  if (!db || !myUid) { isAdmin = false; return; }
+  const u = firebase.auth().currentUser;
+  if (!u || u.isAnonymous) { setAdmin(false); return; }
+  db.ref("admins/" + myUid).once("value")
+    .then(s => setAdmin(s.val() === true))
+    .catch(() => setAdmin(false));
+}
+function setAdmin(v) {
+  isAdmin = v;
+  const b = $("adminBtn");
+  b.classList.toggle("admin-on", isAdmin && adminOn);
+  b.textContent = isAdmin && adminOn ? "Admin on" : "Admin";
+  renderList();
+  if (selectedId) openInfo(selectedId);
+  if (!$("adminModal").hidden) renderAdmin();
+}
+
+async function adminSignIn() {
+  adminErr = ""; renderAdmin();
+  const provider = new firebase.auth.GoogleAuthProvider();
+  const auth = firebase.auth();
+  try {
+    const u = auth.currentUser;
+    if (u && u.isAnonymous) {
+      // upgrade this browser's anonymous ID, so foods you added here stay yours
+      try { await u.linkWithPopup(provider); }
+      catch (e) {
+        if (e.code === "auth/credential-already-in-use" && e.credential) await auth.signInWithCredential(e.credential);
+        else throw e;
+      }
+    } else {
+      await auth.signInWithPopup(provider);
+    }
+    myUid = auth.currentUser.uid;
+    checkAdmin();
+  } catch (e) {
+    const c = (e && e.code) || "";
+    adminErr = c.includes("unauthorized-domain") ? "Firebase hasn't approved this website yet: add it under Authentication → Settings → Authorized domains."
+      : c.includes("operation-not-allowed") ? "Google sign-in isn't turned on in Firebase yet (Authentication → Sign-in method → Google)."
+      : c.includes("popup-blocked") ? "Your browser blocked the sign-in window. Allow pop-ups for this site and try again."
+      : c.includes("popup-closed") || c.includes("cancelled-popup") ? ""
+      : "Sign-in didn't work: " + ((e && e.message) || "unknown error");
+  }
+  renderAdmin();
+}
+
+async function adminSignOut() {
+  await firebase.auth().signOut();   // a fresh anonymous ID is created right after
+  isAdmin = false; setAdmin(false);
+}
+
+function renderAdmin() {
+  const body = $("adminBody");
+  const u = window.firebase && firebase.auth && firebase.auth().currentUser;
+  const signedIn = u && !u.isAnonymous;
+  if (!db) { body.innerHTML = `<p>Can't reach the database right now.</p>`; return; }
+  if (!signedIn) {
+    body.innerHTML = `<p>Sign in with your Google account to delete any food on the plot.</p>
+      <div class="admin-actions"><button class="primary" type="button" id="adminGo">Sign in with Google</button></div>
+      <div class="admin-err">${esc(adminErr)}</div>
+      <p class="muted">Only accounts listed as admins in the database can delete other people's foods.</p>`;
+    $("adminGo").onclick = adminSignIn;
+    return;
+  }
+  if (!isAdmin) {
+    body.innerHTML = `<p>Signed in as <b>${esc(u.email || "your Google account")}</b>, but this account isn't an admin yet.</p>
+      <ol>
+        <li>In Firebase, open <b>Realtime Database → Data</b>.</li>
+        <li>Add a child <code>admins</code>, and under it a child named with your ID below, set to <code>true</code>.</li>
+      </ol>
+      <p>Your ID: <code id="myUidCode">${esc(myUid)}</code></p>
+      <div class="admin-actions">
+        <button class="primary" type="button" id="adminCopy">Copy ID</button>
+        <button type="button" id="adminRecheck">Check again</button>
+        <button type="button" id="adminOut">Sign out</button>
+      </div>
+      <div class="admin-err">${esc(adminErr)}</div>`;
+    $("adminCopy").onclick = async () => {
+      try { await navigator.clipboard.writeText(myUid); $("adminCopy").textContent = "Copied"; }
+      catch (e) { $("adminCopy").textContent = "Select the ID to copy"; }
+    };
+    $("adminRecheck").onclick = checkAdmin;
+    $("adminOut").onclick = adminSignOut;
+    return;
+  }
+  body.innerHTML = `<p>Signed in as <b>${esc(u.email || "admin")}</b>.</p>
+    <label class="switch"><input type="checkbox" id="adminToggle" ${adminOn ? "checked" : ""}> Admin mode</label>
+    <p class="muted">With admin mode on, a red × appears on every food in the list, and a trash button appears in each food's details window.</p>
+    <div class="admin-actions"><button type="button" id="adminOut">Sign out</button></div>`;
+  $("adminToggle").onchange = e => { adminOn = e.target.checked; setAdmin(isAdmin); };
+  $("adminOut").onclick = adminSignOut;
+}
+
+async function deleteFood(p) {
+  const who = mine(p) ? "" : ` (added by ${p.author || "an anonymous user"})`;
+  if (!confirm(`Delete "${p.item}"${who} for everyone?`)) return;
+  try { await db.ref(PATH + "/" + p.id).remove(); }
+  catch (e) { alert(writeErrorText(e)); }
 }
 
 // adds a new review, or (with id) updates one of your own
@@ -1420,7 +1575,8 @@ function openInfo(id) {
   $("infoBy").textContent = p.author || "Anonymous user";
   // each reviewer's own pixel scramble: named reviewers by name, anonymous ones by their browser
   $("infoAvatar").outerHTML = `<span id="infoAvatar">${pixelTile("@" + (p.author ? p.author.toLowerCase() : "anon:" + (p.uid || "")))}</span>`;
-  $("infoEdit").hidden = !(p.uid && p.uid === myUid);
+  $("infoEdit").hidden = !mine(p);
+  $("infoDel").hidden = !canDelete(p);
   $("infoScores").innerHTML = [
     ["Cost", p.cost, AXES.x.color],
     ["Portion size", p.portion, AXES.z.color],
@@ -1460,6 +1616,7 @@ function placeInfo() {
 
 $("infoClose").addEventListener("click", closeInfo);
 $("infoEdit").addEventListener("click", () => { if (selectedId) openEdit(selectedId); });
+$("infoDel").addEventListener("click", () => { const p = points.find(q => q.id === selectedId); if (p) deleteFood(p); });
 
 /* =========================================================
    6. Add form: location + food-type suggestions, 0–10 circle ratings,
@@ -1740,7 +1897,7 @@ function foodRow(p) {
     li.innerHTML = `${pixelTile(p.location, p.id)}
       <span class="txt"><span class="name"></span><span class="where"></span></span>
       <span class="vals" title="Cost · Portion · Taste">${p.cost} · ${p.portion} · ${p.taste}</span>
-      ${p.uid && p.uid === myUid ? `<button class="del" type="button" title="Delete your food">&times;</button>` : ""}`;
+      ${canDelete(p) ? `<button class="del${mine(p) ? "" : " admin"}" type="button" title="${mine(p) ? "Delete your food" : "Delete (admin)"}">&times;</button>` : ""}`;
     li.querySelector(".name").textContent = p.item;
     li.querySelector(".name").title = p.item;
     li.querySelector(".where").textContent = p.types.join(", ");
@@ -1749,11 +1906,7 @@ function foodRow(p) {
     li.addEventListener("click", e => { if (!e.target.closest(".del") && passes(p)) focusPoint(p.id); });
     li.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === li && passes(p)) focusPoint(p.id); });
     const del = li.querySelector(".del");
-    if (del) del.addEventListener("click", async () => {
-      if (!confirm(`Delete "${p.item}" for everyone?`)) return;
-      try { await db.ref(PATH + "/" + p.id).remove(); }
-      catch (e) { alert(writeErrorText(e)); }
-    });
+    if (del) del.addEventListener("click", () => deleteFood(p));
     return li;
 }
 renderList();
@@ -1911,6 +2064,11 @@ function renderTools() {
 $("verLabel").textContent = `Food Plotter ${VERSION}`;
 $("fixesList").innerHTML = CHANGELOG.map((c, i) =>
   `<section class="fx"><h4>Version ${esc(c.v)}${i === 0 ? ' <span class="cur">current</span>' : ''}<span class="fxd">${esc(c.d)}</span></h4><ul>${c.n.map(x => `<li>${esc(x)}</li>`).join("")}</ul></section>`).join("");
+const openAdmin = () => { $("adminModal").hidden = false; renderAdmin(); };
+const closeAdmin = () => { $("adminModal").hidden = true; $("adminBtn").focus(); };
+$("adminBtn").addEventListener("click", openAdmin);
+$("adminClose").addEventListener("click", closeAdmin);
+$("adminModal").addEventListener("click", e => { if (e.target === $("adminModal")) closeAdmin(); });
 const openFixes = () => { $("fixesModal").hidden = false; $("fixesClose").focus(); };
 const closeFixes = () => { $("fixesModal").hidden = true; $("fixesBtn").focus(); };
 $("fixesBtn").addEventListener("click", openFixes);
@@ -1918,7 +2076,8 @@ $("fixesClose").addEventListener("click", closeFixes);
 $("fixesModal").addEventListener("click", e => { if (e.target === $("fixesModal")) closeFixes(); });
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
-  if (!$("fixesModal").hidden) closeFixes();
+  if (!$("adminModal").hidden) closeAdmin();
+  else if (!$("fixesModal").hidden) closeFixes();
   else if (!info.hidden) closeInfo();
   else if (drawer.classList.contains("open")) setDrawer(false);
 });
