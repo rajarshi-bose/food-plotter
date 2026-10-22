@@ -197,20 +197,6 @@
     gap: 13px;
     overflow-y: auto;
   }
-  .stat-bar { display: flex; flex-direction: column; gap: 5px; }
-  .section-label { font-family: Silkscreen, monospace; font-size: 13px; }
-  .stat-bar select {
-    width: 100%;
-    font-size: 13px;
-    padding: 8px 10px;
-    border: 2px solid var(--line);
-    border-radius: 8px;
-    background: #fff;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .stat-bar select:focus { outline: none; border-color: var(--blue); }
-
   .add-btn {
     font-family: Silkscreen, monospace;
     font-size: 15px;
@@ -365,9 +351,130 @@
   .list .del:hover { color: var(--red); }
   .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 14px 0; }
 
+  /* ---------- filter pill on the plot ---------- */
+  .filter-pill {
+    position: absolute; left: 12px; top: 12px; z-index: 2;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    max-width: calc(100% - 24px);
+    font-size: 12px;
+    padding: 5px 6px 5px 10px;
+    background: #fff; border: 1.5px solid var(--ink); border-radius: 999px;
+  }
+  .filter-pill[hidden] { display: none; }
+  .filter-pill b { font-weight: 700; }
+  .filter-pill button {
+    border: none; background: #f1eee6; border-radius: 999px; cursor: pointer;
+    font: 600 11px "Schibsted Grotesk", sans-serif; padding: 3px 8px; color: var(--ink);
+  }
+  .filter-pill button:hover { background: #e6e1d4; }
+
+  /* ---------- stats drawer ---------- */
+  .stats-btn {
+    position: fixed; left: 18px; bottom: 8px; z-index: 32;
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 600 12px "Schibsted Grotesk", sans-serif;
+    padding: 4px 10px 4px 6px;
+    background: #fff; color: var(--ink);
+    border: 1.5px solid var(--ink); border-radius: 7px;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .stats-btn svg { width: 18px; height: 18px; display: block; }
+  .stats-btn:hover, .stats-btn:focus-visible, .stats-btn[aria-expanded="true"] { color: var(--blue); border-color: var(--blue); }
+  .stats-btn .count {
+    font-size: 10.5px; background: var(--blue); color: #fff; border-radius: 999px; padding: 1px 6px;
+  }
+  .stats-btn .count[hidden] { display: none; }
+
+  .drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 31;
+    height: min(330px, 62vh);
+    background: rgba(255, 255, 255, .96);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-top: 2px solid var(--ink);
+    box-shadow: 0 -6px 0 rgba(29, 27, 38, .08);
+    transform: translateY(100%);
+    transition: transform .38s cubic-bezier(.19, 1, .22, 1);
+    display: flex; flex-direction: column;
+    visibility: hidden;
+  }
+  .drawer.open { transform: none; visibility: visible; }
+  .drawer:not(.open) { transition: transform .3s ease-in, visibility 0s .3s; }
+  .drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px 8px;
+  }
+  .drawer-head h2 { font-family: Silkscreen, monospace; font-weight: 400; font-size: 15px; }
+  .drawer-head .sub { font-size: 12px; color: var(--muted); margin-left: 10px; }
+  .tools {
+    flex: 1; min-height: 0;
+    display: flex; gap: 14px;
+    overflow-x: auto; overflow-y: hidden;
+    padding: 4px 18px 44px;
+    scroll-snap-type: x proximity;
+  }
+  .tool {
+    flex: 0 0 280px;
+    display: flex; flex-direction: column; gap: 8px;
+    background: #fff;
+    border: 2px solid var(--ink); border-radius: 12px;
+    box-shadow: 3px 3px 0 var(--ink);
+    padding: 12px 14px;
+    overflow-y: auto;
+    scroll-snap-align: start;
+  }
+  .tool.wide { flex-basis: 340px; }
+  .tool h3 { font-family: Silkscreen, monospace; font-weight: 400; font-size: 13px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tool h3 small { font: 400 11px "Schibsted Grotesk", sans-serif; color: var(--muted); }
+  .tool .note { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .tool .empty-note { font-size: 12.5px; color: var(--muted); padding: 6px 0; }
+
+  .kw-pick { display: flex; flex-wrap: wrap; gap: 5px; }
+  .kw-pick button {
+    font: 600 11.5px "Schibsted Grotesk", sans-serif;
+    padding: 4px 9px; border-radius: 999px; cursor: pointer;
+    border: 1.5px solid #d6dcf3; background: #fff; color: #2d3f7a;
+  }
+  .kw-pick button span { font-weight: 400; opacity: .65; margin-left: 3px; }
+  .kw-pick button.on { background: var(--point); border-color: var(--point); color: #fff; }
+  .seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { font: 600 11.5px "Schibsted Grotesk", sans-serif; padding: 3px 9px; border: none; background: #fff; color: var(--muted); cursor: pointer; }
+  .seg button.on { background: var(--ink); color: #fff; }
+  .tool-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+  .link-btn { border: none; background: none; color: var(--blue); font: 600 12px "Schibsted Grotesk", sans-serif; cursor: pointer; padding: 0; }
+  .link-btn:disabled { color: var(--muted); cursor: default; }
+
+  .stat-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .stat-table th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; padding: 2px 0 4px; }
+  .stat-table th:not(:first-child), .stat-table td:not(:first-child) { text-align: right; }
+  .stat-table td { padding: 3px 0; border-top: 1px solid #f0ece2; }
+  .stat-table td:first-child { font-weight: 600; }
+  .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+  .toggle { display: flex; align-items: center; gap: 7px; font-size: 12.5px; cursor: pointer; }
+  .toggle input { accent-color: var(--point); }
+
+  .corr { display: flex; flex-direction: column; gap: 9px; }
+  .corr-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 12.5px; }
+  .corr-row .r { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .corr-row .bar { grid-column: 1 / -1; height: 6px; background: #f0ece2; border-radius: 3px; position: relative; }
+  .corr-row .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+  .corr-row .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); }
+  .corr-row .words { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+
+  .rank { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+  .rank li { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; align-items: baseline; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+  .rank li:hover { background: #eef1fb; }
+  .rank .n { color: var(--muted); font-size: 11px; }
+  .rank .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .rank .nm small { font-weight: 400; color: var(--muted); }
+  .rank .v { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  .list li.item.out { opacity: .38; }
+  .list li.item.out .dot { background: #b9b3a5; }
+
   /* ---------- version + fixes log ---------- */
   .ver-row {
-    position: fixed; right: 18px; bottom: 10px; z-index: 5;
+    position: fixed; right: 18px; bottom: 10px; z-index: 32;
     display: flex; align-items: center; gap: 10px;
   }
   .ver { font-family: Silkscreen, monospace; font-size: 11px; color: var(--muted); }
@@ -446,17 +553,11 @@
       <div class="kw-head">Keywords</div>
       <div class="chips" id="infoKw"></div>
     </div>
+    <div class="filter-pill" id="filterPill" hidden></div>
     <div class="hint">Drag to rotate · scroll to zoom · click a point for details · double-click to reset</div>
   </div>
 
   <aside class="card panel">
-    <div class="stat-bar">
-      <label class="section-label" for="statSel">Statistics</label>
-      <select id="statSel">
-        <option value="" selected>Choose a statistic…</option>
-      </select>
-    </div>
-
     <button class="add-btn" id="addBtn" type="button">+ Add point</button>
 
     <div class="add-form" id="addForm" hidden>
@@ -505,6 +606,21 @@
   </aside>
 </main>
 
+<button class="stats-btn" id="statsBtn" type="button" aria-expanded="false" aria-controls="drawer">
+  <svg viewBox="0 0 12 12" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">
+    <path d="M1 11H11V12H1Z M2 6H4V10H2Z M5 3H7V10H5Z M8 1H10V10H8Z"/>
+  </svg>
+  Stats &amp; filters <span class="count" id="filterCount" hidden>0</span>
+</button>
+
+<section class="drawer" id="drawer" aria-label="Statistics and filters">
+  <div class="drawer-head">
+    <div><h2 style="display:inline">Stats &amp; filters</h2><span class="sub" id="drawerSub"></span></div>
+    <button class="ver-btn" id="drawerClose" type="button">Close</button>
+  </div>
+  <div class="tools" id="tools"></div>
+</section>
+
 <div class="ver-row"><span class="ver" id="verLabel">Food Plotter</span><button class="ver-btn" id="fixesBtn" type="button">Fixes</button></div>
 
 <div class="overlay" id="fixesModal" hidden><div class="fixes" role="dialog" aria-modal="true" aria-labelledby="fixesTitle">
@@ -518,6 +634,12 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.7", d: "Oct 22, 2026", n: [
+    "New Stats & filters drawer, opened from the pixel chart button in the bottom-left corner",
+    "Filter by keyword: pick from the most-used keywords, and foods without them drop out of the plot",
+    "Stats for the foods shown: averages and spread, correlation between ratings, best value ranking, and averages by location",
+    "Optional average point on the plot",
+    "Removed the Statistics menu from the side panel"] },
   { v: "1.6", d: "Oct 22, 2026", n: [
     "Edit your own foods: open one from the list or the plot and tap the pencil",
     "Add your name when adding a food; the details window shows who added it, or Anonymous user"] },
@@ -731,7 +853,7 @@ function startFirebase() {
     if (selectedId && !points.some(p => p.id === selectedId)) closeInfo();
     else if (selectedId) openInfo(selectedId);
     if (editingId && !points.some(p => p.id === editingId)) { resetForm(); form.hidden = true; }
-    renderList(); setLive();
+    renderList(); renderTools(); setLive();
   }, err => {
     readError = err && err.code === "PERMISSION_DENIED"
       ? "The database rules haven't been set up yet."
@@ -941,33 +1063,62 @@ function drawAxes() {
   label([-1, 1.22, -1], AXES.y.name, AXES.y.color, title);
 }
 
+/* ---------- filters ----------
+   Every filter is a test a food must pass to stay in the plot.
+   Foods that fail drop through the floor and fade out; they rise
+   back when the filter is cleared. New filter types just add a test. */
+const filters = {
+  keyword: { on: () => kwSel.size > 0, test: p => {
+    const ks = p.keywords.map(k => k.toLowerCase());
+    return kwMode === "all" ? [...kwSel].every(k => ks.includes(k)) : [...kwSel].some(k => ks.includes(k));
+  } },
+};
+let kwSel = new Set();
+let kwMode = "any";
+const activeFilters = () => Object.values(filters).filter(f => f.on());
+const passes = p => activeFilters().every(f => f.test(p));
+const shownPoints = () => points.filter(passes);
+const vis = new Map();   // id -> 0..1, eased toward 1 (shown) or 0 (filtered out)
+
 let hits = [];  // screen positions of points from the last frame, for clicking
 function pointRadius(scr, emphasized) {
   return (emphasized ? 8.5 : 7) * view.zoom * (scr.s / baseScale());
 }
 
 function drawPoints() {
-  const drawn = points.map(p => {
-    const pos = posOf(p);
-    return { p, pos, scr: project(pos) };
-  }).sort((a, b) => a.scr.depth - b.scr.depth); // far ones first
+  const ease = reduceMotion ? 1 : 0.11;
+  const drawn = [];
+  for (const p of points) {
+    const target = passes(p) ? 1 : 0;
+    let v = vis.has(p.id) ? vis.get(p.id) : target;
+    v += (target - v) * ease;
+    if (Math.abs(target - v) < 0.002) v = target;
+    vis.set(p.id, v);
+    if (v < 0.01) continue;
+    const base = posOf(p);
+    // filtered-out foods fall through the floor as they fade
+    const pos = [base[0], base[1] - (1 - v) * 1.6, base[2]];
+    drawn.push({ p, v, base, pos, scr: project(pos) });
+  }
+  drawn.sort((a, b) => a.scr.depth - b.scr.depth); // far ones first
 
   // drop lines to the floor
-  drawn.forEach(({ pos }) => {
-    line(pos, [pos[0], -1, pos[2]], "rgba(74, 102, 184, 0.35)", 1, [3, 3]);
-    const f = project([pos[0], -1, pos[2]]);
+  drawn.forEach(({ base, pos, v }) => {
+    if (pos[1] > -1) line(pos, [pos[0], -1, pos[2]], `rgba(74, 102, 184, ${0.35 * v})`, 1, [3, 3]);
+    const f = project([base[0], -1, base[2]]);
     ctx.beginPath();
     ctx.ellipse(f.x, f.y, 4, 2, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(74, 102, 184, 0.22)";
+    ctx.fillStyle = `rgba(74, 102, 184, ${0.22 * v})`;
     ctx.fill();
   });
 
   hits = [];
-  drawn.forEach(({ p, scr }) => {
+  drawn.forEach(({ p, scr, v }) => {
     const sel = p.id === selectedId;
     const emph = sel || p.id === hoverId;
     const r = pointRadius(scr, emph);
-    hits.push({ id: p.id, x: scr.x, y: scr.y, r, depth: scr.depth });
+    if (v > 0.6) hits.push({ id: p.id, x: scr.x, y: scr.y, r, depth: scr.depth });
+    ctx.globalAlpha = Math.pow(v, 1.4);
 
     if (sel) { // soft ring around the open point
       ctx.beginPath();
@@ -991,8 +1142,32 @@ function drawPoints() {
     ctx.strokeText(p.item, scr.x + r + 5, scr.y);
     ctx.fillStyle = "#1d1b26";
     ctx.fillText(p.item, scr.x + r + 5, scr.y);
+    ctx.globalAlpha = 1;
   });
+
+  if (showAvg) drawAverage();
 }
+
+// hollow diamond at the mean of the foods currently shown
+function drawAverage() {
+  const s = shownPoints();
+  if (!s.length) return;
+  const m = k => s.reduce((a, p) => a + p[k], 0) / s.length;
+  const pos = [toCube(m("cost")), toCube(m("taste")), toCube(m("portion"))];
+  line(pos, [pos[0], -1, pos[2]], "rgba(29, 27, 38, .35)", 1, [2, 4]);
+  const c = project(pos);
+  const r = 9 * (c.s / baseScale()) * view.zoom;
+  ctx.beginPath();
+  ctx.moveTo(c.x, c.y - r); ctx.lineTo(c.x + r, c.y); ctx.lineTo(c.x, c.y + r); ctx.lineTo(c.x - r, c.y); ctx.closePath();
+  ctx.fillStyle = "rgba(255, 255, 255, .85)"; ctx.fill();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = "#1d1b26"; ctx.stroke();
+  ctx.font = "700 12px 'Schibsted Grotesk'";
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.9)";
+  ctx.strokeText("Average", c.x + r + 6, c.y);
+  ctx.fillStyle = "#1d1b26"; ctx.fillText("Average", c.x + r + 6, c.y);
+}
+let showAvg = false;
 
 function draw() {
   ctx.clearRect(0, 0, W, H);
@@ -1418,7 +1593,8 @@ function markListSelection() {
 
 function renderList() {
   listEl.innerHTML = "";
-  $("count").textContent = points.length;
+  const shownN = shownPoints().length;
+  $("count").textContent = activeFilters().length ? `${shownN} of ${points.length}` : points.length;
   if (!points.length) {
     const li = document.createElement("li");
     li.className = "empty";
@@ -1428,7 +1604,8 @@ function renderList() {
   }
   points.forEach(p => {
     const li = document.createElement("li");
-    li.className = "item";
+    li.className = "item" + (passes(p) ? "" : " out");
+    if (!passes(p)) li.title = "Hidden by the current filter";
     li.dataset.id = p.id;
     li.tabIndex = 0;
     li.innerHTML = `<span class="dot"></span>
@@ -1440,8 +1617,8 @@ function renderList() {
     li.querySelector(".where").textContent = p.location;
     li.addEventListener("mouseenter", () => { hoverId = p.id; li.classList.add("active"); });
     li.addEventListener("mouseleave", () => { hoverId = null; li.classList.remove("active"); });
-    li.addEventListener("click", e => { if (!e.target.closest(".del")) focusPoint(p.id); });
-    li.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === li) focusPoint(p.id); });
+    li.addEventListener("click", e => { if (!e.target.closest(".del") && passes(p)) focusPoint(p.id); });
+    li.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === li && passes(p)) focusPoint(p.id); });
     const del = li.querySelector(".del");
     if (del) del.addEventListener("click", async () => {
       if (!confirm(`Delete "${p.item}" for everyone?`)) return;
@@ -1459,7 +1636,148 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 else startFirebase();
 
 /* =========================================================
-   8. Version + fixes log
+   8. Stats & filters drawer
+   ========================================================= */
+const drawer = $("drawer"), statsBtn = $("statsBtn"), tools = $("tools");
+function setDrawer(open) {
+  drawer.classList.toggle("open", open);
+  statsBtn.setAttribute("aria-expanded", String(open));
+  if (open) renderTools();
+}
+statsBtn.addEventListener("click", () => setDrawer(!drawer.classList.contains("open")));
+$("drawerClose").addEventListener("click", () => setDrawer(false));
+
+const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
+function pearson(a, b) {
+  const ma = mean(a), mb = mean(b);
+  let num = 0, da = 0, db2 = 0;
+  for (let i = 0; i < a.length; i++) { num += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db2 += (b[i] - mb) ** 2; }
+  return da && db2 ? num / Math.sqrt(da * db2) : null;
+}
+const fmt = (x, d = 1) => (Math.round(x * 10 ** d) / 10 ** d).toFixed(d);
+const valueScore = p => p.taste + p.portion - p.cost;
+
+function popularKeywords() {
+  const counts = new Map();
+  points.forEach(p => new Set(p.keywords.map(k => k.toLowerCase())).forEach(k => counts.set(k, (counts.get(k) || 0) + 1)));
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 24);
+}
+
+function applyFilterChange() {
+  if (selectedId) { const p = points.find(q => q.id === selectedId); if (p && !passes(p)) closeInfo(); }
+  renderList(); renderTools(); renderPill();
+}
+
+function renderPill() {
+  const pill = $("filterPill"), n = activeFilters().length;
+  $("filterCount").hidden = !n; $("filterCount").textContent = kwSel.size;
+  if (!kwSel.size) { pill.hidden = true; return; }
+  const words = [...kwSel].map(esc).join(kwMode === "all" ? " + " : " or ");
+  pill.innerHTML = `Showing <b>${words}</b> · ${shownPoints().length} of ${points.length}<button type="button" id="pillClear">Clear</button>`;
+  pill.hidden = false;
+  $("pillClear").onclick = () => { kwSel.clear(); applyFilterChange(); };
+}
+
+function renderTools() {
+  if (!drawer.classList.contains("open")) { renderPill(); return; }
+  const s = shownPoints();
+  $("drawerSub").textContent = activeFilters().length
+    ? `Stats use the ${s.length} food${s.length === 1 ? "" : "s"} shown`
+    : `${s.length} food${s.length === 1 ? "" : "s"}`;
+
+  // --- 1. keyword filter ---
+  const pop = popularKeywords();
+  const filterCard = `<div class="tool wide">
+    <h3>Filter by keyword <small>${kwSel.size ? `${s.length} of ${points.length} shown` : "tap to filter"}</small></h3>
+    ${pop.length ? `<div class="kw-pick" id="kwPick">${pop.map(([k, n]) =>
+      `<button type="button" data-k="${esc(k)}" class="${kwSel.has(k) ? "on" : ""}" aria-pressed="${kwSel.has(k)}">${esc(k)}<span>${n}</span></button>`).join("")}</div>`
+      : `<div class="empty-note">No keywords yet. Pick a restaurant when adding a food to get some.</div>`}
+    <div class="tool-row">
+      <span class="seg" role="group" aria-label="Match">
+        <button type="button" data-mode="any" class="${kwMode === "any" ? "on" : ""}">Match any</button><button type="button" data-mode="all" class="${kwMode === "all" ? "on" : ""}">Match all</button>
+      </span>
+      <button type="button" class="link-btn" id="kwClear" ${kwSel.size ? "" : "disabled"}>Clear filter</button>
+    </div>
+    <div class="note">Foods without the selected keywords drop out of the plot.</div>
+  </div>`;
+
+  // --- 2. summary ---
+  const axes = [["Cost", "cost", AXES.x.color], ["Portion", "portion", AXES.z.color], ["Taste", "taste", AXES.y.color]];
+  const summaryCard = `<div class="tool">
+    <h3>Summary <small>${s.length} food${s.length === 1 ? "" : "s"}</small></h3>
+    ${s.length ? `<table class="stat-table">
+      <tr><th></th><th>Average</th><th>Spread ±</th><th>Range</th></tr>
+      ${axes.map(([n, k, c]) => { const a = s.map(p => p[k]); return `<tr><td><span class="sw" style="background:${c}"></span>${n}</td><td>${fmt(mean(a))}</td><td>${fmt(sd(a))}</td><td>${Math.min(...a)}–${Math.max(...a)}</td></tr>`; }).join("")}
+    </table>
+    <label class="toggle"><input type="checkbox" id="avgToggle" ${showAvg ? "checked" : ""}> Show the average as a point on the plot</label>
+    <div class="note">Spread is the standard deviation: how far foods typically sit from the average.</div>`
+    : `<div class="empty-note">No foods to summarize.</div>`}
+  </div>`;
+
+  // --- 3. correlation ---
+  const pairs = [["Cost", "cost", "Taste", "taste"], ["Cost", "cost", "Portion", "portion"], ["Portion", "portion", "Taste", "taste"]];
+  const words = r => {
+    const a = Math.abs(r), str = a >= .7 ? "Strong" : a >= .4 ? "Moderate" : a >= .2 ? "Weak" : "Little to no";
+    if (a < .2) return `${str} relationship`;
+    return `${str} ${r > 0 ? "positive" : "negative"}: ${r > 0 ? "they rise together" : "one rises as the other falls"}`;
+  };
+  const corrCard = `<div class="tool">
+    <h3>Correlation <small>Pearson r</small></h3>
+    ${s.length >= 3 ? `<div class="corr">${pairs.map(([an, ak, bn, bk]) => {
+      const r = pearson(s.map(p => p[ak]), s.map(p => p[bk]));
+      if (r === null) return `<div class="corr-row"><span>${an} vs ${bn}</span><span class="r">—</span><span class="words">Needs some variety in both ratings</span></div>`;
+      const w = Math.abs(r) * 50, left = r >= 0 ? 50 : 50 - w;
+      return `<div class="corr-row"><span>${an} vs ${bn}</span><span class="r">${r >= 0 ? "+" : "−"}${fmt(Math.abs(r), 2)}</span>
+        <span class="bar"><i style="left:${left}%;width:${w}%;background:${r >= 0 ? "var(--green)" : "var(--red)"}"></i></span>
+        <span class="words">${words(r)}</span></div>`;
+    }).join("")}</div>
+    <div class="note">From −1 to +1. Does paying more get you better taste or bigger portions?</div>`
+    : `<div class="empty-note">Needs at least 3 foods.</div>`}
+  </div>`;
+
+  // --- 4. best value ---
+  const best = [...s].sort((a, b) => valueScore(b) - valueScore(a) || b.taste - a.taste).slice(0, 6);
+  const valueCard = `<div class="tool">
+    <h3>Best value <small>taste + portion − cost</small></h3>
+    ${best.length ? `<ol class="rank">${best.map((p, i) =>
+      `<li data-id="${esc(p.id)}"><span class="n">${i + 1}</span><span class="nm">${esc(p.item)}${p.location ? ` <small>· ${esc(p.location)}</small>` : ""}</span><span class="v">${valueScore(p)}</span></li>`).join("")}</ol>
+    <div class="note">Scores run from −10 to 20. Tap a food to fly to it.</div>`
+    : `<div class="empty-note">No foods to rank.</div>`}
+  </div>`;
+
+  // --- 5. by location ---
+  const groups = new Map();
+  s.forEach(p => { const k = p.location || "No location"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); });
+  const locs = [...groups].sort((a, b) => b[1].length - a[1].length || mean(b[1].map(p => p.taste)) - mean(a[1].map(p => p.taste))).slice(0, 8);
+  const locCard = `<div class="tool wide">
+    <h3>By location <small>averages</small></h3>
+    ${locs.length ? `<table class="stat-table">
+      <tr><th>Location</th><th>Foods</th><th>Cost</th><th>Portion</th><th>Taste</th></tr>
+      ${locs.map(([n, ps]) => `<tr><td>${esc(n)}</td><td>${ps.length}</td><td>${fmt(mean(ps.map(p => p.cost)))}</td><td>${fmt(mean(ps.map(p => p.portion)))}</td><td>${fmt(mean(ps.map(p => p.taste)))}</td></tr>`).join("")}
+    </table>` : `<div class="empty-note">No foods yet.</div>`}
+  </div>`;
+
+  tools.innerHTML = filterCard + summaryCard + corrCard + valueCard + locCard;
+
+  // wire up
+  const pick = $("kwPick");
+  if (pick) pick.addEventListener("click", e => {
+    const b = e.target.closest("button[data-k]"); if (!b) return;
+    const k = b.dataset.k;
+    kwSel.has(k) ? kwSel.delete(k) : kwSel.add(k);
+    applyFilterChange();
+  });
+  tools.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => { kwMode = b.dataset.mode; applyFilterChange(); }));
+  $("kwClear").addEventListener("click", () => { kwSel.clear(); applyFilterChange(); });
+  const avg = $("avgToggle");
+  if (avg) avg.addEventListener("change", () => { showAvg = avg.checked; });
+  tools.querySelectorAll(".rank li[data-id]").forEach(li => li.addEventListener("click", () => focusPoint(li.dataset.id)));
+  renderPill();
+}
+
+/* =========================================================
+   9. Version + fixes log
    ========================================================= */
 $("verLabel").textContent = `Food Plotter ${VERSION}`;
 $("fixesList").innerHTML = CHANGELOG.map((c, i) =>
@@ -1473,6 +1791,7 @@ document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   if (!$("fixesModal").hidden) closeFixes();
   else if (!info.hidden) closeInfo();
+  else if (drawer.classList.contains("open")) setDrawer(false);
 });
 </script>
 </body>
