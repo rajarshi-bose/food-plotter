@@ -351,14 +351,36 @@
   .list .del:hover { color: var(--red); }
   .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 14px 0; }
 
-  /* ---------- filter pill on the plot ---------- */
-  .filter-pill {
-    position: absolute; left: 12px; top: 12px; z-index: 2;
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  /* ---------- plot corner: stats button + filter tag ---------- */
+  .plot-tools {
+    position: absolute; left: 12px; top: 12px; z-index: 4;
+    display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap;
     max-width: calc(100% - 24px);
+    pointer-events: none;
+  }
+  .plot-tools > * { pointer-events: auto; }
+  .stats-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 600 12.5px "Schibsted Grotesk", sans-serif;
+    padding: 5px 11px 5px 7px;
+    background: #fff; color: var(--ink);
+    border: 1.5px solid var(--ink); border-radius: 8px;
+    box-shadow: 2px 2px 0 var(--ink);
+    cursor: pointer;
+    transition: border-color .15s, color .15s, transform .12s, box-shadow .12s;
+  }
+  .stats-btn svg { width: 18px; height: 18px; display: block; }
+  .stats-btn:hover, .stats-btn:focus-visible { color: var(--blue); border-color: var(--blue); }
+  .stats-btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+  .stats-btn[aria-expanded="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .stats-btn .count { font-size: 10.5px; background: var(--blue); color: #fff; border-radius: 999px; padding: 1px 6px; }
+  .stats-btn .count[hidden] { display: none; }
+  .filter-pill {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
     font-size: 12px;
-    padding: 5px 6px 5px 10px;
+    padding: 4px 6px 4px 10px;
     background: #fff; border: 1.5px solid var(--ink); border-radius: 999px;
+    margin-top: 1px;
   }
   .filter-pill[hidden] { display: none; }
   .filter-pill b { font-weight: 700; }
@@ -368,66 +390,53 @@
   }
   .filter-pill button:hover { background: #e6e1d4; }
 
-  /* ---------- stats drawer ---------- */
-  .stats-btn {
-    position: fixed; left: 18px; bottom: 8px; z-index: 32;
-    display: inline-flex; align-items: center; gap: 7px;
-    font: 600 12px "Schibsted Grotesk", sans-serif;
-    padding: 4px 10px 4px 6px;
-    background: #fff; color: var(--ink);
-    border: 1.5px solid var(--ink); border-radius: 7px;
-    cursor: pointer;
-    transition: border-color .15s, color .15s;
-  }
-  .stats-btn svg { width: 18px; height: 18px; display: block; }
-  .stats-btn:hover, .stats-btn:focus-visible, .stats-btn[aria-expanded="true"] { color: var(--blue); border-color: var(--blue); }
-  .stats-btn .count {
-    font-size: 10.5px; background: var(--blue); color: #fff; border-radius: 999px; padding: 1px 6px;
-  }
-  .stats-btn .count[hidden] { display: none; }
-
+  /* ---------- stats drawer (slides in from the left; the plot moves over, never covered) ---------- */
+  :root { --drawer-w: 350px; }
+  main { transition: padding-left .4s cubic-bezier(.19, 1, .22, 1); }
+  body.drawer-open main { padding-left: calc(var(--drawer-w) + 24px); }
   .drawer {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 31;
-    height: min(330px, 62vh);
+    position: fixed; top: var(--bar-h); left: 0; bottom: 0; z-index: 8;
+    width: var(--drawer-w);
     background: rgba(255, 255, 255, .96);
     backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    border-top: 2px solid var(--ink);
-    box-shadow: 0 -6px 0 rgba(29, 27, 38, .08);
-    transform: translateY(100%);
-    transition: transform .38s cubic-bezier(.19, 1, .22, 1);
+    border-right: 2px solid var(--ink);
+    transform: translateX(-100%);
+    transition: transform .4s cubic-bezier(.19, 1, .22, 1), visibility 0s .4s;
     display: flex; flex-direction: column;
     visibility: hidden;
   }
-  .drawer.open { transform: none; visibility: visible; }
-  .drawer:not(.open) { transition: transform .3s ease-in, visibility 0s .3s; }
+  .drawer.open { transform: none; visibility: visible; transition: transform .4s cubic-bezier(.19, 1, .22, 1); }
   .drawer-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 18px 8px;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    padding: 14px 16px 10px;
   }
   .drawer-head h2 { font-family: Silkscreen, monospace; font-weight: 400; font-size: 15px; }
-  .drawer-head .sub { font-size: 12px; color: var(--muted); margin-left: 10px; }
+  .drawer-head .sub { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
   .tools {
     flex: 1; min-height: 0;
-    display: flex; gap: 14px;
-    overflow-x: auto; overflow-y: hidden;
-    padding: 4px 18px 44px;
-    scroll-snap-type: x proximity;
+    display: flex; flex-direction: column; gap: 14px;
+    overflow-y: auto; overflow-x: hidden;
+    padding: 4px 16px 24px 16px;
   }
   .tool {
-    flex: 0 0 280px;
+    flex: none;
     display: flex; flex-direction: column; gap: 8px;
     background: #fff;
     border: 2px solid var(--ink); border-radius: 12px;
     box-shadow: 3px 3px 0 var(--ink);
     padding: 12px 14px;
-    overflow-y: auto;
-    scroll-snap-align: start;
+    margin-right: 3px;
   }
-  .tool.wide { flex-basis: 340px; }
   .tool h3 { font-family: Silkscreen, monospace; font-weight: 400; font-size: 13px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .tool h3 small { font: 400 11px "Schibsted Grotesk", sans-serif; color: var(--muted); }
   .tool .note { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
   .tool .empty-note { font-size: 12.5px; color: var(--muted); padding: 6px 0; }
+
+  @media (max-width: 760px) {
+    :root { --drawer-w: min(88vw, 350px); }
+    body.drawer-open main { padding-left: 16px; }   /* on phones the drawer overlays */
+    .drawer { box-shadow: 6px 0 0 rgba(29, 27, 38, .1); }
+  }
 
   .kw-pick { display: flex; flex-wrap: wrap; gap: 5px; }
   .kw-pick button {
@@ -553,7 +562,15 @@
       <div class="kw-head">Keywords</div>
       <div class="chips" id="infoKw"></div>
     </div>
-    <div class="filter-pill" id="filterPill" hidden></div>
+    <div class="plot-tools">
+      <button class="stats-btn" id="statsBtn" type="button" aria-expanded="false" aria-controls="drawer">
+        <svg viewBox="0 0 12 12" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">
+          <path d="M1 11H11V12H1Z M2 6H4V10H2Z M5 3H7V10H5Z M8 1H10V10H8Z"/>
+        </svg>
+        Stats &amp; filters <span class="count" id="filterCount" hidden>0</span>
+      </button>
+      <div class="filter-pill" id="filterPill" hidden></div>
+    </div>
     <div class="hint">Drag to rotate · scroll to zoom · click a point for details · double-click to reset</div>
   </div>
 
@@ -606,16 +623,9 @@
   </aside>
 </main>
 
-<button class="stats-btn" id="statsBtn" type="button" aria-expanded="false" aria-controls="drawer">
-  <svg viewBox="0 0 12 12" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">
-    <path d="M1 11H11V12H1Z M2 6H4V10H2Z M5 3H7V10H5Z M8 1H10V10H8Z"/>
-  </svg>
-  Stats &amp; filters <span class="count" id="filterCount" hidden>0</span>
-</button>
-
 <section class="drawer" id="drawer" aria-label="Statistics and filters">
   <div class="drawer-head">
-    <div><h2 style="display:inline">Stats &amp; filters</h2><span class="sub" id="drawerSub"></span></div>
+    <div><h2>Stats &amp; filters</h2><span class="sub" id="drawerSub"></span></div>
     <button class="ver-btn" id="drawerClose" type="button">Close</button>
   </div>
   <div class="tools" id="tools"></div>
@@ -634,6 +644,9 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.8", d: "Oct 22, 2026", n: [
+    "Stats & filters button moved to the top-left corner of the plot",
+    "The Stats & filters panel now slides in from the left and the plot moves over, so it stays fully visible while you filter"] },
   { v: "1.7", d: "Oct 22, 2026", n: [
     "New Stats & filters drawer, opened from the pixel chart button in the bottom-left corner",
     "Filter by keyword: pick from the most-used keywords, and foods without them drop out of the plot",
@@ -975,6 +988,8 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener("resize", resize);
+// the plot card changes size when the stats drawer opens, so follow the canvas itself
+if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
 resize();
 
 function rotate([x, y, z]) {
@@ -1641,6 +1656,7 @@ else startFirebase();
 const drawer = $("drawer"), statsBtn = $("statsBtn"), tools = $("tools");
 function setDrawer(open) {
   drawer.classList.toggle("open", open);
+  document.body.classList.toggle("drawer-open", open);
   statsBtn.setAttribute("aria-expanded", String(open));
   if (open) renderTools();
 }
