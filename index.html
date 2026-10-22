@@ -672,6 +672,7 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.14", d: "Oct 22, 2026", n: ["Added Carport Coffee (College Station) to the location suggestions"] },
   { v: "1.13", d: "Oct 22, 2026", n: [
     "The selected point turns red with a soft glow",
     "Reviewers get a small pixel icon of their own instead of the person symbol",
@@ -852,6 +853,7 @@ const PLACES = [
   ["Panera Bread",            ["american"],                 ["fast-casual", "cafe"]],
   ["Cava",                    ["mediterranean"],            ["fast-casual", "build-your-own"]],
   ["Starbucks",               [],                           ["cafe", "drive-thru"]],
+  ["Carport Coffee",          ["american"],                 ["sit-down", "cafe"]],
 ].map(([name, cuisine, style]) => ({ name, cuisine, style }));
 
 // Each restaurant's list icon is a 5×5 pixel tile: its colors scattered
