@@ -187,6 +187,11 @@
   .chip button { border: none; background: none; cursor: pointer; color: inherit; opacity: .6; font-size: 13px; line-height: 1; padding: 0 0 0 2px; }
   .chip button:hover { opacity: 1; }
   .chips .none { font-size: 12px; color: var(--muted); }
+  .chip.type { background: var(--ink); color: #fff; font-weight: 600; }
+  .pick-group { display: flex; flex-direction: column; gap: 5px; }
+  .pick-group .pick-label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+  .pick-group .note { font-weight: 400; font-size: 11.5px; color: var(--muted); }
+  .kw-pick button.type-on { background: var(--ink); border-color: var(--ink); color: #fff; }
 
   /* ---------- side panel ---------- */
   .panel {
@@ -281,7 +286,7 @@
   .rating i.on { background: var(--c); }
   .rating:hover i { transform: scale(1.04); }
 
-  .kw-input { display: flex; flex-direction: column; gap: 6px; }
+  .field .hint-line { font-weight: 400; font-size: 11.5px; color: var(--muted); }
 
   .form-actions { display: flex; gap: 8px; }
   .form-actions button {
@@ -559,7 +564,9 @@
       <div class="loc" id="infoLoc"></div>
       <div class="by"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5c0-3.2 2.7-5 6-5s6 1.8 6 5z"/></svg><span id="infoBy"></span></div>
       <div class="scores" id="infoScores"></div>
-      <div class="kw-head">Keywords</div>
+      <div class="kw-head">Food type</div>
+      <div class="chips" id="infoType"></div>
+      <div class="kw-head">Cuisine &amp; style</div>
       <div class="chips" id="infoKw"></div>
     </div>
     <div class="plot-tools">
@@ -590,6 +597,12 @@
         <input type="text" id="fItem" maxlength="60" placeholder="e.g. Burrito bowl" autocomplete="off">
       </div>
       <div class="field">
+        <label for="fType">Food type</label>
+        <input type="text" id="fType" maxlength="30" placeholder="e.g. bowl, burger, coffee" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="typeSuggest" aria-autocomplete="list">
+        <ul class="suggest" id="typeSuggest" role="listbox" hidden></ul>
+      </div>
+      <div class="field">
         <span class="rating-head">Cost <output id="oCost">0 / 10</output></span>
         <div class="rating" id="rCost" style="--c: var(--c-cost)"></div>
       </div>
@@ -601,10 +614,14 @@
         <span class="rating-head">Taste <output id="oTaste">0 / 10</output></span>
         <div class="rating" id="rTaste" style="--c: var(--c-taste)"></div>
       </div>
-      <div class="field kw-input">
-        <label for="fKw">Keywords</label>
-        <div class="chips" id="formKw"></div>
-        <input type="text" id="fKw" maxlength="30" placeholder="Add a keyword, press Enter" autocomplete="off">
+      <div class="pick-group">
+        <span class="pick-label">Cuisine</span>
+        <div class="kw-pick" id="formCuisine"></div>
+      </div>
+      <div class="pick-group">
+        <span class="pick-label">Style</span>
+        <div class="kw-pick" id="formStyle"></div>
+        <span class="note" id="pickNote">Picking a location fills these in. Tap to change.</span>
       </div>
       <div class="field">
         <label for="fName">Your name <span class="opt">(optional)</span></label>
@@ -618,7 +635,6 @@
     </div>
 
     <div class="list-head">Foods <span class="live" id="live"><i></i><b id="liveText">Connecting…</b> · <span id="count">0</span></span></div>
-    <div class="notice" id="localNotice" hidden></div>
     <ul class="list" id="list"></ul>
   </aside>
 </main>
@@ -644,6 +660,11 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.9", d: "Oct 22, 2026", n: [
+    "New Food type field (bowl, burrito, burger, coffee…) for what you're rating",
+    "Locations now only set cuisine and style, which you can adjust with tap-to-toggle chips",
+    "Filters are split into Food type, Cuisine and Style, so a coffee never groups with a sandwich",
+    "Started fresh: all earlier foods were cleared"] },
   { v: "1.8", d: "Oct 22, 2026", n: [
     "Stats & filters button moved to the top-left corner of the plot",
     "The Stats & filters panel now slides in from the left and the plot moves over, so it stays fully visible while you filter"] },
@@ -769,36 +790,47 @@ try { ["400 12px", "600 12px", "700 14px"].forEach(f => document.fonts.load(f + 
 })();
 
 /* =========================================================
-   2. Restaurants + their keywords (for the location suggestions)
+   2. Fixed vocabularies + restaurants
+      Locations only carry cuisine and style. What the food itself
+      is (bowl, burger, coffee…) is its own field, so a cortado never
+      shares a cluster with a sandwich just because both came from a cafe.
    ========================================================= */
+const CUISINES = ["american", "mexican", "tex-mex", "chinese", "asian-fusion", "japanese", "korean",
+                  "vietnamese", "thai", "indian", "italian", "mediterranean", "cajun"];
+const STYLES = ["fast-food", "fast-casual", "sit-down", "drive-thru", "build-your-own", "cafe", "food-truck"];
+const FOOD_TYPES = ["bowl", "burrito", "taco", "burger", "sandwich", "wrap", "pizza", "chicken", "wings",
+                    "noodles", "rice", "salad", "soup", "side", "breakfast", "pastry", "dessert",
+                    "coffee", "tea", "drink", "smoothie"];
+
 const PLACES = [
-  ["Taco Bell",               ["fast food", "mexican", "tex-mex", "tacos", "burritos", "drive-thru", "late night", "cheap"]],
-  ["Chipotle",                ["fast casual", "mexican", "burritos", "bowls", "build your own"]],
-  ["Mai Shan Yun",            ["asian fusion", "chinese", "noodles", "local", "sit-down"]],
-  ["McDonald's",              ["fast food", "american", "burgers", "fries", "breakfast", "drive-thru", "cheap"]],
-  ["Whataburger",             ["fast food", "american", "burgers", "texas", "late night", "drive-thru"]],
-  ["Chick-fil-A",             ["fast food", "american", "chicken", "sandwiches", "drive-thru"]],
-  ["Raising Cane's",          ["fast food", "american", "chicken", "chicken fingers", "drive-thru"]],
-  ["Layne's Chicken Fingers", ["fast food", "american", "chicken", "chicken fingers", "local", "texas"]],
-  ["Torchy's Tacos",          ["fast casual", "tex-mex", "tacos", "texas"]],
-  ["Fuego Tortilla Grill",    ["fast casual", "tex-mex", "tacos", "local", "late night"]],
-  ["Freebirds World Burrito", ["fast casual", "tex-mex", "burritos", "build your own", "texas"]],
-  ["Panda Express",           ["fast food", "chinese", "american chinese", "rice", "noodles"]],
-  ["Subway",                  ["fast food", "sandwiches", "subs", "build your own"]],
-  ["Jersey Mike's",           ["fast casual", "sandwiches", "subs"]],
-  ["Five Guys",               ["fast casual", "american", "burgers", "fries"]],
-  ["Wendy's",                 ["fast food", "american", "burgers", "drive-thru"]],
-  ["Sonic",                   ["fast food", "american", "burgers", "drive-in", "drinks"]],
-  ["Popeyes",                 ["fast food", "chicken", "fried chicken", "cajun"]],
-  ["Wingstop",                ["fast food", "chicken", "wings"]],
-  ["Domino's",                ["fast food", "pizza", "delivery"]],
-  ["Pizza Hut",               ["fast food", "pizza", "delivery"]],
-  ["Panera Bread",            ["fast casual", "bakery", "sandwiches", "soup", "salads"]],
-  ["Cava",                    ["fast casual", "mediterranean", "bowls", "build your own"]],
-  ["Starbucks",               ["coffee", "cafe", "drinks", "pastries"]],
-].map(([name, keywords]) => ({ name, keywords }));
+  ["Taco Bell",               ["mexican"],                  ["fast-food", "drive-thru"]],
+  ["Chipotle",                ["mexican"],                  ["fast-casual", "build-your-own"]],
+  ["Mai Shan Yun",            ["asian-fusion", "chinese"],  ["sit-down"]],
+  ["McDonald's",              ["american"],                 ["fast-food", "drive-thru"]],
+  ["Whataburger",             ["american"],                 ["fast-food", "drive-thru"]],
+  ["Chick-fil-A",             ["american"],                 ["fast-food", "drive-thru"]],
+  ["Raising Cane's",          ["american"],                 ["fast-food", "drive-thru"]],
+  ["Layne's Chicken Fingers", ["american"],                 ["fast-food", "drive-thru"]],
+  ["Torchy's Tacos",          ["tex-mex"],                  ["fast-casual"]],
+  ["Fuego Tortilla Grill",    ["tex-mex"],                  ["fast-casual"]],
+  ["Freebirds World Burrito", ["tex-mex"],                  ["fast-casual", "build-your-own"]],
+  ["Panda Express",           ["chinese"],                  ["fast-food"]],
+  ["Subway",                  ["american"],                 ["fast-food", "build-your-own"]],
+  ["Jersey Mike's",           ["american"],                 ["fast-casual"]],
+  ["Five Guys",               ["american"],                 ["fast-casual"]],
+  ["Wendy's",                 ["american"],                 ["fast-food", "drive-thru"]],
+  ["Sonic",                   ["american"],                 ["fast-food", "drive-thru"]],
+  ["Popeyes",                 ["cajun", "american"],        ["fast-food", "drive-thru"]],
+  ["Wingstop",                ["american"],                 ["fast-casual"]],
+  ["Domino's",                ["italian", "american"],      ["fast-food"]],
+  ["Pizza Hut",               ["italian", "american"],      ["fast-food"]],
+  ["Panera Bread",            ["american"],                 ["fast-casual", "cafe"]],
+  ["Cava",                    ["mediterranean"],            ["fast-casual", "build-your-own"]],
+  ["Starbucks",               [],                           ["cafe", "drive-thru"]],
+].map(([name, cuisine, style]) => ({ name, cuisine, style }));
 
 const findPlace = name => PLACES.find(p => p.name.toLowerCase() === String(name).trim().toLowerCase());
+const placeTags = p => [...p.cuisine, ...p.style];
 
 /* =========================================================
    3. Shared reviews (Firebase Realtime Database)
@@ -815,7 +847,9 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "474112913592",
   appId: "1:474112913592:web:385f2302f2c52d5ac0c44d",
 };
-const LOCAL_KEYS = ["foodPlotter.points.v2", "foodPlotter.points.v1"];  // older browser-only saves
+const PATH = "foods";   // fresh collection for the cuisine / style / food-type model
+// browser-only saves from early versions are no longer used
+["foodPlotter.points.v2", "foodPlotter.points.v1"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
 
 const toList = v => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.values(v) : []);
 function normalize(p, id) {
@@ -826,7 +860,9 @@ function normalize(p, id) {
     cost: clamp(Math.round(+p.cost || 0), 0, 10),
     portion: clamp(Math.round(+p.portion || 0), 0, 10),
     taste: clamp(Math.round(+p.taste || 0), 0, 10),
-    keywords: toList(p.keywords).map(k => String(k).slice(0, 30)).filter(Boolean).slice(0, 20),
+    type: String(p.type ?? "").trim().toLowerCase().slice(0, 30),
+    cuisine: toList(p.cuisine).map(k => String(k).toLowerCase()).filter(k => CUISINES.includes(k)).slice(0, 10),
+    style: toList(p.style).map(k => String(k).toLowerCase()).filter(k => STYLES.includes(k)).slice(0, 10),
     author: String(p.author ?? "").trim().slice(0, 40),
     uid: p.uid || null,
     createdAt: +p.createdAt || 0,
@@ -858,7 +894,7 @@ function startFirebase() {
 
   db.ref(".info/connected").on("value", s => { connected = !!s.val(); setLive(); });
 
-  db.ref("reviews").orderByChild("createdAt").on("value", snap => {
+  db.ref(PATH).orderByChild("createdAt").on("value", snap => {
     const next = [];
     snap.forEach(c => { next.push(normalize(c.val() || {}, c.key)); });
     points = next;
@@ -876,7 +912,7 @@ function startFirebase() {
 
   app.auth().onAuthStateChanged(u => {
     myUid = u ? u.uid : null;
-    renderList(); updateLocalNotice();
+    renderList();
     if (selectedId) openInfo(selectedId);
   });
   app.auth().signInAnonymously().catch(() => { myUid = null; });
@@ -896,15 +932,17 @@ async function saveReview(p, id = null) {
   const fields = {
     item: p.item,
     location: p.location || null,          // empty fields are left out
-    keywords: p.keywords.length ? p.keywords : null,
+    type: p.type,
+    cuisine: p.cuisine.length ? p.cuisine : null,
+    style: p.style.length ? p.style : null,
     author: p.author || null,
     cost: p.cost, portion: p.portion, taste: p.taste,
   };
   if (id) {
-    await db.ref("reviews/" + id).update({ ...fields, updatedAt: firebase.database.ServerValue.TIMESTAMP });
+    await db.ref(PATH + "/" + id).update({ ...fields, updatedAt: firebase.database.ServerValue.TIMESTAMP });
     return id;
   }
-  const ref = db.ref("reviews").push();
+  const ref = db.ref(PATH).push();
   await ref.set({ ...fields, uid, createdAt: firebase.database.ServerValue.TIMESTAMP });
   return ref.key;
 }
@@ -915,37 +953,6 @@ function writeErrorText(e) {
   if (code.includes("operation-not-allowed") || code.includes("admin-restricted")) return "Anonymous sign-in isn't turned on in Firebase yet.";
   if (code.includes("network") || code.includes("not connected")) return "You're offline. Try again once you're connected.";
   return "Couldn't save: " + (e && e.message || "unknown error");
-}
-
-// ---- foods saved only in this browser by earlier versions ----
-function readLocal() {
-  for (const k of LOCAL_KEYS) {
-    try { const raw = localStorage.getItem(k); if (raw) { const a = JSON.parse(raw); if (Array.isArray(a) && a.length) return a.map(x => normalize(x)); } } catch (e) {}
-  }
-  return [];
-}
-function clearLocal() { LOCAL_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} }); }
-
-function updateLocalNotice() {
-  const box = $("localNotice");
-  const local = readLocal();
-  if (!local.length || !db) { box.hidden = true; return; }
-  const n = local.length;
-  box.className = "notice";
-  box.innerHTML = `${n} food${n === 1 ? " is" : "s are"} saved only in this browser.
-    <div class="row"><button class="primary" type="button" id="shareLocal">Share ${n === 1 ? "it" : "them"}</button><button type="button" id="dropLocal">Discard</button></div>`;
-  box.hidden = false;
-  $("shareLocal").onclick = async () => {
-    $("shareLocal").disabled = true; $("shareLocal").textContent = "Sharing…";
-    try {
-      for (const p of local) await saveReview(p);
-      clearLocal(); box.hidden = true;
-    } catch (e) {
-      box.className = "notice err";
-      box.textContent = writeErrorText(e);
-    }
-  };
-  $("dropLocal").onclick = () => { clearLocal(); box.hidden = true; };
 }
 
 /* =========================================================
@@ -1082,14 +1089,19 @@ function drawAxes() {
    Every filter is a test a food must pass to stay in the plot.
    Foods that fail drop through the floor and fade out; they rise
    back when the filter is cleared. New filter types just add a test. */
-const filters = {
-  keyword: { on: () => kwSel.size > 0, test: p => {
-    const ks = p.keywords.map(k => k.toLowerCase());
-    return kwMode === "all" ? [...kwSel].every(k => ks.includes(k)) : [...kwSel].some(k => ks.includes(k));
-  } },
+// Within a group a food needs any one of the picks; across groups it needs all of them.
+const sel = { type: new Set(), cuisine: new Set(), style: new Set() };
+const groupTest = key => p => {
+  const vals = key === "type" ? [p.type] : p[key];
+  return [...sel[key]].some(v => vals.includes(v));
 };
-let kwSel = new Set();
-let kwMode = "any";
+const filters = {
+  type:    { on: () => sel.type.size > 0,    test: groupTest("type") },
+  cuisine: { on: () => sel.cuisine.size > 0, test: groupTest("cuisine") },
+  style:   { on: () => sel.style.size > 0,   test: groupTest("style") },
+};
+const selectedCount = () => sel.type.size + sel.cuisine.size + sel.style.size;
+const clearFilters = () => Object.values(sel).forEach(x => x.clear());
 const activeFilters = () => Object.values(filters).filter(f => f.on());
 const passes = p => activeFilters().every(f => f.test(p));
 const shownPoints = () => points.filter(passes);
@@ -1328,9 +1340,11 @@ function openInfo(id) {
     ["Portion size", p.portion, AXES.z.color],
     ["Taste", p.taste, AXES.y.color],
   ].map(([n, v, c]) => `<div class="score-row"><span>${n}</span>${dotsHtml(v, c)}<span class="num">${v}/10</span></div>`).join("");
-  $("infoKw").innerHTML = p.keywords.length
-    ? p.keywords.map(k => `<span class="chip">${esc(k)}</span>`).join("")
-    : `<span class="none">No keywords</span>`;
+  $("infoType").innerHTML = p.type ? `<span class="chip type">${esc(p.type)}</span>` : `<span class="none">Not set</span>`;
+  const tags = [...p.cuisine, ...p.style];
+  $("infoKw").innerHTML = tags.length
+    ? tags.map(k => `<span class="chip">${esc(k)}</span>`).join("")
+    : `<span class="none">None</span>`;
   const already = wasOpen;
   info.dataset.id = id;
   info.hidden = false;
@@ -1363,15 +1377,14 @@ $("infoClose").addEventListener("click", closeInfo);
 $("infoEdit").addEventListener("click", () => { if (selectedId) openEdit(selectedId); });
 
 /* =========================================================
-   6. Add form: location suggestions, 0–10 circle ratings, keywords
+   6. Add form: location + food-type suggestions, 0–10 circle ratings,
+      cuisine / style pickers
    ========================================================= */
 const addBtn = $("addBtn");
 const form = $("addForm");
 const fLoc = $("fLoc");
 const fItem = $("fItem");
-const fKw = $("fKw");
-const suggest = $("suggest");
-const formKwEl = $("formKw");
+const fType = $("fType");
 
 // ---- circle rating widget ----
 function makeRating(el, outEl, label) {
@@ -1417,94 +1430,91 @@ const ratings = {
   taste: makeRating($("rTaste"), $("oTaste"), "Taste rating"),
 };
 
-// ---- keyword chips in the form ----
-let placeKw = [];   // keywords that came from the chosen restaurant
-let ownKw = [];     // keywords typed in by hand
-const formKeywords = () => [...new Set([...placeKw, ...ownKw])];
+// ---- cuisine + style pickers ----
+const pickCuisine = new Set(), pickStyle = new Set();
+function renderPickers() {
+  const chips = (list, set) => list.map(k =>
+    `<button type="button" data-k="${k}" class="${set.has(k) ? "on" : ""}" aria-pressed="${set.has(k)}">${k}</button>`).join("");
+  $("formCuisine").innerHTML = chips(CUISINES, pickCuisine);
+  $("formStyle").innerHTML = chips(STYLES, pickStyle);
+}
+[["formCuisine", pickCuisine], ["formStyle", pickStyle]].forEach(([id, set]) =>
+  $(id).addEventListener("click", e => {
+    const b = e.target.closest("button[data-k]"); if (!b) return;
+    set.has(b.dataset.k) ? set.delete(b.dataset.k) : set.add(b.dataset.k);
+    renderPickers();
+  }));
+function setPicks(cuisine, style) {
+  pickCuisine.clear(); cuisine.forEach(k => pickCuisine.add(k));
+  pickStyle.clear(); style.forEach(k => pickStyle.add(k));
+  renderPickers();
+}
 
-function renderFormKw() {
-  const kws = formKeywords();
-  formKwEl.innerHTML = kws.length
-    ? kws.map(k => `<span class="chip">${esc(k)}<button type="button" data-k="${esc(k)}" aria-label="Remove ${esc(k)}">&times;</button></span>`).join("")
-    : `<span class="none">Pick a restaurant or add your own</span>`;
+// ---- a small autocomplete used by Location and Food type ----
+function makeCombo(input, list, getOptions, onPick) {
+  let matches = [], hl = -1;
+  const hide = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); };
+  const show = () => {
+    const q = input.value.trim().toLowerCase();
+    const all = getOptions();
+    matches = q
+      ? all.filter(o => o.label.toLowerCase().includes(q))
+           .sort((a, b) => a.label.toLowerCase().indexOf(q) - b.label.toLowerCase().indexOf(q))
+      : all;
+    hl = matches.length ? 0 : -1;
+    if (!matches.length) { hide(); return; }
+    list.innerHTML = matches.map((o, i) =>
+      `<li role="option" data-i="${i}" class="${i === hl ? "hl" : ""}">${esc(o.label)}${o.sub ? `<small>${esc(o.sub)}</small>` : ""}</li>`).join("");
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  };
+  const move = d => {
+    if (list.hidden || !matches.length) return;
+    hl = (hl + d + matches.length) % matches.length;
+    [...list.children].forEach((li, i) => li.classList.toggle("hl", i === hl));
+    list.children[hl].scrollIntoView({ block: "nearest" });
+  };
+  const pick = o => { onPick(o); hide(); };
+  input.addEventListener("input", show);
+  input.addEventListener("focus", show);
+  input.addEventListener("blur", () => setTimeout(hide, 120));
+  input.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown") { e.preventDefault(); list.hidden ? show() : move(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
+    else if (e.key === "Enter" && !list.hidden && matches[hl]) { e.preventDefault(); e.stopImmediatePropagation(); pick(matches[hl]); }
+    else if (e.key === "Escape") hide();
+  });
+  list.addEventListener("mousedown", e => e.preventDefault()); // keep focus while picking
+  list.addEventListener("click", e => {
+    const li = e.target.closest("li[data-i]");
+    if (li) pick(matches[+li.dataset.i]);
+  });
+  return { hide };
 }
-formKwEl.addEventListener("click", e => {
-  const b = e.target.closest("button[data-k]");
-  if (!b) return;
-  const k = b.dataset.k;
-  placeKw = placeKw.filter(x => x !== k);
-  ownKw = ownKw.filter(x => x !== k);
-  renderFormKw();
-});
-fKw.addEventListener("keydown", e => {
-  if (e.key === "Enter" || e.key === ",") {
-    e.preventDefault();
-    const k = fKw.value.trim().replace(/,$/, "").toLowerCase();
-    if (k && !formKeywords().includes(k)) ownKw.push(k);
-    fKw.value = "";
-    renderFormKw();
-  }
-});
 
-// ---- location suggestions ----
-let matches = [], hl = -1;
-function showSuggest() {
-  const q = fLoc.value.trim().toLowerCase();
-  // also suggest locations already used on saved points
-  const used = [...new Set(points.map(p => p.location).filter(Boolean))]
-    .filter(n => !findPlace(n)).map(name => ({ name, keywords: [] }));
-  const all = [...PLACES, ...used];
-  matches = q
-    ? all.filter(p => p.name.toLowerCase().includes(q))
-         .sort((a, b) => a.name.toLowerCase().indexOf(q) - b.name.toLowerCase().indexOf(q))
-    : all;
-  hl = matches.length ? 0 : -1;
-  if (!matches.length) { hideSuggest(); return; }
-  suggest.innerHTML = matches.map((p, i) =>
-    `<li role="option" data-i="${i}" class="${i === hl ? "hl" : ""}">${esc(p.name)}${p.keywords.length ? `<small>${esc(p.keywords.slice(0, 4).join(" · "))}</small>` : ""}</li>`).join("");
-  suggest.hidden = false;
-  fLoc.setAttribute("aria-expanded", "true");
-}
-function hideSuggest() {
-  suggest.hidden = true;
-  fLoc.setAttribute("aria-expanded", "false");
-}
-function moveHl(d) {
-  if (suggest.hidden || !matches.length) return;
-  hl = (hl + d + matches.length) % matches.length;
-  [...suggest.children].forEach((li, i) => li.classList.toggle("hl", i === hl));
-  suggest.children[hl].scrollIntoView({ block: "nearest" });
-}
-function pickPlace(p) {
-  fLoc.value = p.name;          // snaps into the Location bar
-  placeKw = [...p.keywords];    // and brings its keywords with it
-  renderFormKw();
-  hideSuggest();
+// Location: picking a restaurant snaps it in and sets cuisine + style
+const locCombo = makeCombo(fLoc, $("suggest"), () => {
+  const used = [...new Set(points.map(p => p.location).filter(Boolean))].filter(n => !findPlace(n));
+  return [
+    ...PLACES.map(p => ({ label: p.name, sub: placeTags(p).join(" · "), place: p })),
+    ...used.map(n => ({ label: n, sub: "", place: null })),
+  ];
+}, o => {
+  fLoc.value = o.label;
+  if (o.place) setPicks(o.place.cuisine, o.place.style);
   fItem.focus();
-}
-fLoc.addEventListener("input", () => {
-  // typing over a picked restaurant drops its keywords until a new one is chosen
-  if (!findPlace(fLoc.value)) placeKw = [];
-  renderFormKw();
-  showSuggest();
 });
-fLoc.addEventListener("focus", showSuggest);
-fLoc.addEventListener("blur", () => setTimeout(hideSuggest, 120));
-fLoc.addEventListener("keydown", e => {
-  if (e.key === "ArrowDown") { e.preventDefault(); suggest.hidden ? showSuggest() : moveHl(1); }
-  else if (e.key === "ArrowUp") { e.preventDefault(); moveHl(-1); }
-  else if (e.key === "Enter") {
-    e.preventDefault();
-    if (!suggest.hidden && matches[hl]) pickPlace(matches[hl]);
-    else fItem.focus();
-  }
-  else if (e.key === "Escape") hideSuggest();
-});
-suggest.addEventListener("mousedown", e => e.preventDefault()); // keep focus while picking
-suggest.addEventListener("click", e => {
-  const li = e.target.closest("li[data-i]");
-  if (li) pickPlace(matches[+li.dataset.i]);
-});
+fLoc.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); fItem.focus(); } });
+
+// Food type: what the item itself is
+const typeCombo = makeCombo(fType, $("typeSuggest"), () => {
+  const counts = new Map();
+  points.forEach(p => p.type && counts.set(p.type, (counts.get(p.type) || 0) + 1));
+  const extra = [...counts.keys()].filter(t => !FOOD_TYPES.includes(t));
+  return [...FOOD_TYPES, ...extra].map(t => ({ label: t, sub: counts.get(t) ? `${counts.get(t)} on the plot` : "" }));
+}, o => { fType.value = o.label; fType.classList.remove("bad"); });
+fType.addEventListener("input", () => fType.classList.remove("bad"));
+fType.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPoint(); } });
 
 // ---- open / reset / save ----
 const fName = $("fName");
@@ -1521,14 +1531,13 @@ function setMode(id) {
 
 function resetForm() {
   setMode(null);
-  fLoc.value = ""; fItem.value = ""; fKw.value = "";
+  fLoc.value = ""; fItem.value = ""; fType.value = "";
   try { fName.value = localStorage.getItem(NAME_KEY) || ""; } catch (e) { fName.value = ""; }
-  fItem.classList.remove("bad");
-  placeKw = []; ownKw = [];
+  fItem.classList.remove("bad"); fType.classList.remove("bad");
+  setPicks([], []);
   $("formErr").hidden = true;
   Object.values(ratings).forEach(r => r.set(0));
-  renderFormKw();
-  hideSuggest();
+  locCombo.hide(); typeCombo.hide();
 }
 resetForm();
 
@@ -1545,12 +1554,12 @@ function openEdit(id) {
   setMode(id);
   fLoc.value = p.location;
   fItem.value = p.item;
+  fType.value = p.type;
   fName.value = p.author;
   ratings.cost.set(p.cost);
   ratings.portion.set(p.portion);
   ratings.taste.set(p.taste);
-  placeKw = []; ownKw = [...p.keywords];
-  renderFormKw();
+  setPicks(p.cuisine, p.style);
   form.hidden = false;
   form.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
   fItem.focus();
@@ -1562,17 +1571,21 @@ async function addPoint() {
   if (saving) return;
   const item = fItem.value.trim();
   if (!item) { fItem.focus(); fItem.classList.add("bad"); return; }
+  const type = fType.value.trim().toLowerCase();
+  if (!type) { fType.focus(); fType.classList.add("bad"); return; }
   const location = fLoc.value.trim();
   const known = findPlace(location);
-  const keywords = formKeywords();
-  if (known && !placeKw.length && !keywords.length) keywords.push(...known.keywords);
+  // typed a known restaurant without picking it from the list: still use its tags
+  if (known && !pickCuisine.size && !pickStyle.size) setPicks(known.cuisine, known.style);
   const p = normalize({
     item,
     location: known ? known.name : location,
     cost: ratings.cost.get(),
     portion: ratings.portion.get(),
     taste: ratings.taste.get(),
-    keywords,
+    type,
+    cuisine: [...pickCuisine],
+    style: [...pickStyle],
     author: fName.value,
   });
   try { localStorage.setItem(NAME_KEY, p.author); } catch (e) {}
@@ -1629,7 +1642,7 @@ function renderList() {
       ${p.uid && p.uid === myUid ? `<button class="del" type="button" title="Delete your food">&times;</button>` : ""}`;
     li.querySelector(".name").textContent = p.item;
     li.querySelector(".name").title = p.item;
-    li.querySelector(".where").textContent = p.location;
+    li.querySelector(".where").textContent = [p.location, p.type].filter(Boolean).join(" · ");
     li.addEventListener("mouseenter", () => { hoverId = p.id; li.classList.add("active"); });
     li.addEventListener("mouseleave", () => { hoverId = null; li.classList.remove("active"); });
     li.addEventListener("click", e => { if (!e.target.closest(".del") && passes(p)) focusPoint(p.id); });
@@ -1637,7 +1650,7 @@ function renderList() {
     const del = li.querySelector(".del");
     if (del) del.addEventListener("click", async () => {
       if (!confirm(`Delete "${p.item}" for everyone?`)) return;
-      try { await db.ref("reviews/" + p.id).remove(); }
+      try { await db.ref(PATH + "/" + p.id).remove(); }
       catch (e) { alert(writeErrorText(e)); }
     });
     listEl.appendChild(li);
@@ -1674,10 +1687,11 @@ function pearson(a, b) {
 const fmt = (x, d = 1) => (Math.round(x * 10 ** d) / 10 ** d).toFixed(d);
 const valueScore = p => p.taste + p.portion - p.cost;
 
-function popularKeywords() {
+// values present on the plot for one group, most common first
+function groupCounts(key) {
   const counts = new Map();
-  points.forEach(p => new Set(p.keywords.map(k => k.toLowerCase())).forEach(k => counts.set(k, (counts.get(k) || 0) + 1)));
-  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 24);
+  points.forEach(p => (key === "type" ? [p.type] : p[key]).filter(Boolean).forEach(v => counts.set(v, (counts.get(v) || 0) + 1)));
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
 function applyFilterChange() {
@@ -1686,13 +1700,13 @@ function applyFilterChange() {
 }
 
 function renderPill() {
-  const pill = $("filterPill"), n = activeFilters().length;
-  $("filterCount").hidden = !n; $("filterCount").textContent = kwSel.size;
-  if (!kwSel.size) { pill.hidden = true; return; }
-  const words = [...kwSel].map(esc).join(kwMode === "all" ? " + " : " or ");
-  pill.innerHTML = `Showing <b>${words}</b> · ${shownPoints().length} of ${points.length}<button type="button" id="pillClear">Clear</button>`;
+  const pill = $("filterPill"), n = selectedCount();
+  $("filterCount").hidden = !n; $("filterCount").textContent = n;
+  if (!n) { pill.hidden = true; return; }
+  const parts = ["type", "cuisine", "style"].filter(k => sel[k].size).map(k => [...sel[k]].map(esc).join(" or "));
+  pill.innerHTML = `Showing <b>${parts.join(" · ")}</b> · ${shownPoints().length} of ${points.length}<button type="button" id="pillClear">Clear</button>`;
   pill.hidden = false;
-  $("pillClear").onclick = () => { kwSel.clear(); applyFilterChange(); };
+  $("pillClear").onclick = () => { clearFilters(); applyFilterChange(); };
 }
 
 function renderTools() {
@@ -1702,20 +1716,22 @@ function renderTools() {
     ? `Stats use the ${s.length} food${s.length === 1 ? "" : "s"} shown`
     : `${s.length} food${s.length === 1 ? "" : "s"}`;
 
-  // --- 1. keyword filter ---
-  const pop = popularKeywords();
-  const filterCard = `<div class="tool wide">
-    <h3>Filter by keyword <small>${kwSel.size ? `${s.length} of ${points.length} shown` : "tap to filter"}</small></h3>
-    ${pop.length ? `<div class="kw-pick" id="kwPick">${pop.map(([k, n]) =>
-      `<button type="button" data-k="${esc(k)}" class="${kwSel.has(k) ? "on" : ""}" aria-pressed="${kwSel.has(k)}">${esc(k)}<span>${n}</span></button>`).join("")}</div>`
-      : `<div class="empty-note">No keywords yet. Pick a restaurant when adding a food to get some.</div>`}
+  // --- 1. filter ---
+  const group = (key, title) => {
+    const c = groupCounts(key);
+    if (!c.length) return "";
+    return `<div class="pick-group"><span class="pick-label">${title}</span>
+      <div class="kw-pick" data-group="${key}">${c.map(([v, n]) =>
+        `<button type="button" data-k="${esc(v)}" class="${sel[key].has(v) ? (key === "type" ? "type-on" : "on") : ""}" aria-pressed="${sel[key].has(v)}">${esc(v)}<span>${n}</span></button>`).join("")}</div></div>`;
+  };
+  const groupsHtml = group("type", "Food type") + group("cuisine", "Cuisine") + group("style", "Style");
+  const filterCard = `<div class="tool">
+    <h3>Filter <small>${selectedCount() ? `${s.length} of ${points.length} shown` : "tap to filter"}</small></h3>
+    ${groupsHtml || `<div class="empty-note">Add some foods to filter by type, cuisine and style.</div>`}
     <div class="tool-row">
-      <span class="seg" role="group" aria-label="Match">
-        <button type="button" data-mode="any" class="${kwMode === "any" ? "on" : ""}">Match any</button><button type="button" data-mode="all" class="${kwMode === "all" ? "on" : ""}">Match all</button>
-      </span>
-      <button type="button" class="link-btn" id="kwClear" ${kwSel.size ? "" : "disabled"}>Clear filter</button>
+      <span class="note">Any pick within a group, every group you use.</span>
+      <button type="button" class="link-btn" id="kwClear" ${selectedCount() ? "" : "disabled"}>Clear</button>
     </div>
-    <div class="note">Foods without the selected keywords drop out of the plot.</div>
   </div>`;
 
   // --- 2. summary ---
@@ -1777,15 +1793,13 @@ function renderTools() {
   tools.innerHTML = filterCard + summaryCard + corrCard + valueCard + locCard;
 
   // wire up
-  const pick = $("kwPick");
-  if (pick) pick.addEventListener("click", e => {
+  tools.querySelectorAll(".kw-pick[data-group]").forEach(g => g.addEventListener("click", e => {
     const b = e.target.closest("button[data-k]"); if (!b) return;
-    const k = b.dataset.k;
-    kwSel.has(k) ? kwSel.delete(k) : kwSel.add(k);
+    const set = sel[g.dataset.group], k = b.dataset.k;
+    set.has(k) ? set.delete(k) : set.add(k);
     applyFilterChange();
-  });
-  tools.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => { kwMode = b.dataset.mode; applyFilterChange(); }));
-  $("kwClear").addEventListener("click", () => { kwSel.clear(); applyFilterChange(); });
+  }));
+  $("kwClear").addEventListener("click", () => { clearFilters(); applyFilterChange(); });
   const avg = $("avgToggle");
   if (avg) avg.addEventListener("change", () => { showAvg = avg.checked; });
   tools.querySelectorAll(".rank li[data-id]").forEach(li => li.addEventListener("click", () => focusPoint(li.dataset.id)));
