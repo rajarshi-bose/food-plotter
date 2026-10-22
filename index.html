@@ -504,29 +504,94 @@
     width: min(440px, 100%);
     background: #fff; border: 2px solid var(--ink); border-radius: 14px;
     box-shadow: 6px 6px 0 var(--ink);
-    padding: 18px 22px 20px;
-    display: flex; flex-direction: column; gap: 12px;
+    overflow: hidden;
     font-size: 13.5px; line-height: 1.45;
   }
-  .admin-box p { color: var(--ink); }
-  .admin-box .muted { color: var(--muted); font-size: 12.5px; }
-  .admin-box ol { padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-  .admin-box code {
+  .admin-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .admin-head .ico {
+    width: 34px; height: 34px; flex: none;
+    display: grid; place-items: center;
+    background: var(--ink); color: #fff; border-radius: 9px;
+  }
+  .admin-head .ico svg { width: 18px; height: 18px; display: block; }
+  .admin-head .ttl { flex: 1; min-width: 0; }
+  .admin-head h3 { font-family: Silkscreen, monospace; font-weight: 400; font-size: 17px; line-height: 1.1; }
+  .admin-head .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .admin-x {
+    border: none; background: none; cursor: pointer; color: var(--muted);
+    font-size: 22px; line-height: 1; padding: 2px 6px; border-radius: 7px;
+  }
+  .admin-x:hover, .admin-x:focus-visible { color: var(--ink); background: #f1eee6; }
+
+  .admin-main { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .admin-status {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: #faf8f3; border: 1px solid var(--line); border-radius: 10px;
+  }
+  .admin-status .tile { width: 22px; height: 22px; }
+  .admin-status .who { flex: 1; min-width: 0; }
+  .admin-status .who b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-status .who span { font-size: 11.5px; color: var(--muted); }
+  .badge {
+    font: 700 10.5px "Schibsted Grotesk", sans-serif; text-transform: uppercase; letter-spacing: .08em;
+    padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+    background: #ece8de; color: var(--muted);
+  }
+  .badge.warn { background: #fdf0cf; color: #8a6200; }
+  .badge.on { background: var(--red); color: #fff; }
+  .admin-main p { color: var(--ink); }
+  .admin-main .muted { color: var(--muted); font-size: 12.5px; }
+  .steps { list-style: none; display: flex; flex-direction: column; gap: 8px; counter-reset: step; }
+  .steps li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; font-size: 13px; counter-increment: step; }
+  .steps li::before {
+    content: counter(step);
+    width: 22px; height: 22px; border-radius: 50%;
+    display: grid; place-items: center;
+    font: 700 11.5px "Schibsted Grotesk", sans-serif;
+    background: var(--ink); color: #fff;
+  }
+  .id-box {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 6px 6px 10px;
+    border: 1.5px dashed var(--line); border-radius: 9px;
+  }
+  .id-box code {
+    flex: 1; min-width: 0;
     font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: #f1eee6; border-radius: 5px; padding: 2px 5px; word-break: break-all;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .admin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .admin-actions button {
+  .admin-main code.inline {
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #f1eee6; border-radius: 5px; padding: 1px 5px;
+  }
+  .admin-foot {
+    display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;
+    padding: 12px 18px 14px;
+    border-top: 1px solid var(--line);
+    background: #faf8f3;
+  }
+  .abtn {
     font: 600 13px "Schibsted Grotesk", sans-serif;
-    padding: 8px 13px; border-radius: 8px; cursor: pointer;
-    border: 2px solid var(--ink); background: #fff; color: var(--ink);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    border: 1.5px solid var(--ink); background: #fff; color: var(--ink);
   }
-  .admin-actions button.primary { background: var(--ink); color: #fff; }
-  .admin-actions button.danger { background: var(--red); border-color: var(--red); color: #fff; }
-  .admin-err { color: #b8381d; font-size: 12.5px; }
+  .abtn.primary { background: var(--ink); color: #fff; }
+  .abtn.small { padding: 5px 10px; font-size: 12px; }
+  .abtn:hover { filter: brightness(.95); }
+  .switch-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
+  }
+  .switch-row b { display: block; font-size: 13px; color: var(--ink); }
+  .switch-row span span { font-size: 12px; color: var(--muted); }
+  .switch-row input { width: 18px; height: 18px; accent-color: var(--red); flex: none; }
+  .admin-err { color: #b8381d; font-size: 12.5px; background: #fde9e4; border-radius: 8px; padding: 8px 10px; }
   .admin-err:empty { display: none; }
-  .switch { display: flex; align-items: center; gap: 9px; font-weight: 600; cursor: pointer; }
-  .switch input { width: 16px; height: 16px; accent-color: var(--red); }
   .list .del.admin { color: var(--red); }
   .info-del { color: var(--muted); }
   .info-del:hover, .info-del:focus-visible { color: var(--red) !important; background: #fde9e4 !important; }
@@ -698,7 +763,11 @@
 <div class="ver-row"><span class="ver" id="verLabel">Food Plotter</span><button class="ver-btn" id="adminBtn" type="button">Admin</button><button class="ver-btn" id="fixesBtn" type="button">Fixes</button></div>
 
 <div class="overlay" id="adminModal" hidden><div class="admin-box" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
-  <div class="fixes-head"><h3 id="adminTitle" style="font-family:Silkscreen,monospace;font-weight:400;font-size:18px">Admin</h3><button class="ver-btn" id="adminClose" type="button">Close</button></div>
+  <div class="admin-head">
+    <span class="ico" aria-hidden="true"><svg viewBox="0 0 12 12" fill="currentColor" shape-rendering="crispEdges"><path d="M4 1H8V2H9V5H10V11H2V5H3V2H4ZM4 3V5H8V3ZM5 7V9H7V7Z" fill-rule="evenodd"/></svg></span>
+    <div class="ttl"><h3 id="adminTitle">Admin</h3><div class="sub">Remove any food from the plot</div></div>
+    <button class="admin-x" id="adminClose" type="button" aria-label="Close">&times;</button>
+  </div>
   <div id="adminBody"></div>
 </div></div>
 
@@ -713,6 +782,7 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.16", d: "Oct 22, 2026", n: ["Cleaner Admin window: a status card, numbered setup steps and buttons grouped at the bottom"] },
   { v: "1.15", d: "Oct 22, 2026", n: [
     "New Admin button next to Fixes: the site owner can sign in with Google and delete any food",
     "A trash button in the details window for foods you're allowed to delete",
@@ -1114,40 +1184,64 @@ function renderAdmin() {
   const body = $("adminBody");
   const u = window.firebase && firebase.auth && firebase.auth().currentUser;
   const signedIn = u && !u.isAnonymous;
-  if (!db) { body.innerHTML = `<p>Can't reach the database right now.</p>`; return; }
+  const status = (tile, name, sub, badge, cls) => `<div class="admin-status">${tile}
+      <div class="who"><b>${esc(name)}</b><span>${esc(sub)}</span></div>
+      <span class="badge ${cls}">${badge}</span></div>`;
+  const anonTile = `<span class="tile" aria-hidden="true"><svg viewBox="0 0 5 5" shape-rendering="crispEdges"><rect width="5" height="5" fill="#e2dccd"/><rect x="2" y="1" width="1" height="1" fill="#b9b3a5"/><rect x="1" y="3" width="3" height="1" fill="#b9b3a5"/></svg></span>`;
+  const err = `<div class="admin-err">${esc(adminErr)}</div>`;
+
+  if (!db) {
+    body.innerHTML = `<div class="admin-main">${status(anonTile, "Offline", "Can't reach the database", "Offline", "")}</div>`;
+    return;
+  }
+
   if (!signedIn) {
-    body.innerHTML = `<p>Sign in with your Google account to delete any food on the plot.</p>
-      <div class="admin-actions"><button class="primary" type="button" id="adminGo">Sign in with Google</button></div>
-      <div class="admin-err">${esc(adminErr)}</div>
-      <p class="muted">Only accounts listed as admins in the database can delete other people's foods.</p>`;
+    body.innerHTML = `<div class="admin-main">
+        ${status(anonTile, "Not signed in", "Visitors can only delete their own foods", "Signed out", "")}
+        <p>Sign in with Google to manage every food on the plot.</p>
+        ${err}
+        <p class="muted">Only accounts listed as admins in the database can delete other people's foods.</p>
+      </div>
+      <div class="admin-foot"><button class="abtn primary" type="button" id="adminGo">Sign in with Google</button></div>`;
     $("adminGo").onclick = adminSignIn;
     return;
   }
+
+  const me = u.email || "Google account";
+  const myTile = pixelTile("@" + me.toLowerCase());
+
   if (!isAdmin) {
-    body.innerHTML = `<p>Signed in as <b>${esc(u.email || "your Google account")}</b>, but this account isn't an admin yet.</p>
-      <ol>
-        <li>In Firebase, open <b>Realtime Database → Data</b>.</li>
-        <li>Add a child <code>admins</code>, and under it a child named with your ID below, set to <code>true</code>.</li>
-      </ol>
-      <p>Your ID: <code id="myUidCode">${esc(myUid)}</code></p>
-      <div class="admin-actions">
-        <button class="primary" type="button" id="adminCopy">Copy ID</button>
-        <button type="button" id="adminRecheck">Check again</button>
-        <button type="button" id="adminOut">Sign out</button>
+    body.innerHTML = `<div class="admin-main">
+        ${status(myTile, me, "Signed in", "Not admin", "warn")}
+        <p>This account can't delete other people's foods yet. To make it an admin:</p>
+        <ol class="steps">
+          <li><span>In Firebase, open <b>Realtime Database → Data</b>.</span></li>
+          <li><span>Add a child <code class="inline">admins</code>, and under it a child named with the ID below, set to <code class="inline">true</code>.</span></li>
+          <li><span>Come back here and press <b>Check again</b>.</span></li>
+        </ol>
+        <div class="id-box"><code title="${esc(myUid)}">${esc(myUid)}</code><button class="abtn small" type="button" id="adminCopy">Copy ID</button></div>
+        ${err}
       </div>
-      <div class="admin-err">${esc(adminErr)}</div>`;
+      <div class="admin-foot">
+        <button class="abtn" type="button" id="adminOut">Sign out</button>
+        <button class="abtn primary" type="button" id="adminRecheck">Check again</button>
+      </div>`;
     $("adminCopy").onclick = async () => {
       try { await navigator.clipboard.writeText(myUid); $("adminCopy").textContent = "Copied"; }
-      catch (e) { $("adminCopy").textContent = "Select the ID to copy"; }
+      catch (e) { $("adminCopy").textContent = "Copy failed"; }
     };
     $("adminRecheck").onclick = checkAdmin;
     $("adminOut").onclick = adminSignOut;
     return;
   }
-  body.innerHTML = `<p>Signed in as <b>${esc(u.email || "admin")}</b>.</p>
-    <label class="switch"><input type="checkbox" id="adminToggle" ${adminOn ? "checked" : ""}> Admin mode</label>
-    <p class="muted">With admin mode on, a red × appears on every food in the list, and a trash button appears in each food's details window.</p>
-    <div class="admin-actions"><button type="button" id="adminOut">Sign out</button></div>`;
+
+  body.innerHTML = `<div class="admin-main">
+      ${status(myTile, me, adminOn ? "Admin mode is on" : "Admin mode is off", "Admin", "on")}
+      <label class="switch-row"><span><b>Admin mode</b><span>Show delete buttons on every food</span></span>
+        <input type="checkbox" id="adminToggle" ${adminOn ? "checked" : ""}></label>
+      <p class="muted">A red × appears on each food in the list, and a trash button appears in each food's details window. Deleting always asks first.</p>
+    </div>
+    <div class="admin-foot"><button class="abtn" type="button" id="adminOut">Sign out</button></div>`;
   $("adminToggle").onchange = e => { adminOn = e.target.checked; setAdmin(isAdmin); };
   $("adminOut").onclick = adminSignOut;
 }
