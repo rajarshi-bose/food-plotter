@@ -7,8 +7,11 @@
       ".indexOn": ["createdAt"],
       "$id": {
         ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.exists() && data.child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)))",
-        ".validate": "newData.hasChildren(['item', 'type', 'cost', 'portion', 'taste', 'uid', 'createdAt'])",
+        ".validate": "newData.hasChildren(['item', 'types', 'cost', 'portion', 'taste', 'uid', 'createdAt'])",
         "item":      { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+        "types": {
+          "$k": { ".validate": "$k.matches(/^[0-4]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 30" }
+        },
         "type":      { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" },
         "location":  { ".validate": "newData.isString() && newData.val().length <= 60" },
         "author":    { ".validate": "newData.isString() && newData.val().length <= 40" },

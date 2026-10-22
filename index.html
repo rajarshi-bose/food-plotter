@@ -286,6 +286,9 @@
   .rating i.on { background: var(--c); }
   .rating:hover i { transform: scale(1.04); }
 
+  .type-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .type-chips:empty { display: none; }
+  .type-chips .chip button { color: #fff; }
   .field .hint-line { font-weight: 400; font-size: 11.5px; color: var(--muted); }
 
   .form-actions { display: flex; gap: 8px; }
@@ -343,7 +346,19 @@
   }
   .list li.item:hover, .list li.item.active { border-color: var(--point); }
   .list li.item.selected { border-color: var(--point); box-shadow: inset 3px 0 0 var(--point); }
-  .list .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--point); flex: none; }
+  .tile { width: 20px; height: 20px; flex: none; display: block; border-radius: 4px; overflow: hidden;
+          box-shadow: 0 0 0 1px rgba(29, 27, 38, .18); image-rendering: pixelated; }
+  .tile svg { width: 100%; height: 100%; display: block; }
+  .list li.group {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700;
+    padding: 8px 2px 1px;
+    color: var(--ink);
+  }
+  .list li.group:first-child { padding-top: 0; }
+  .list li.group .gname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list li.group .gcount { font-weight: 400; font-size: 11px; color: var(--muted); }
+  .list li.group.out { opacity: .4; }
   .list .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
   .list .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted); }
@@ -484,7 +499,7 @@
   .rank .v { font-variant-numeric: tabular-nums; font-weight: 700; }
 
   .list li.item.out { opacity: .38; }
-  .list li.item.out .dot { background: #b9b3a5; }
+  .list li.item.out .tile { filter: grayscale(1); opacity: .6; }
 
   /* ---------- version + fixes log ---------- */
   .ver-row {
@@ -597,8 +612,9 @@
         <input type="text" id="fItem" maxlength="60" placeholder="e.g. Burrito bowl" autocomplete="off">
       </div>
       <div class="field">
-        <label for="fType">Food type</label>
-        <input type="text" id="fType" maxlength="30" placeholder="e.g. bowl, burger, coffee" autocomplete="off"
+        <label for="fType">Food type <span class="opt">(pick one or more)</span></label>
+        <div class="type-chips" id="typeChips"></div>
+        <input type="text" id="fType" maxlength="30" placeholder="e.g. tea, drink" autocomplete="off"
                role="combobox" aria-expanded="false" aria-controls="typeSuggest" aria-autocomplete="list">
         <ul class="suggest" id="typeSuggest" role="listbox" hidden></ul>
       </div>
@@ -660,6 +676,10 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.10", d: "Oct 22, 2026", n: [
+    "Food type is now multi-select, so a Thai milk tea can be both tea and drink",
+    "The Foods list is grouped by restaurant",
+    "Each restaurant gets a 5×5 pixel tile made from its colors, in place of the blue dots"] },
   { v: "1.9", d: "Oct 22, 2026", n: [
     "New Food type field (bowl, burrito, burger, coffee…) for what you're rating",
     "Locations now only set cuisine and style, which you can adjust with tap-to-toggle chips",
@@ -829,6 +849,55 @@ const PLACES = [
   ["Starbucks",               [],                           ["cafe", "drive-thru"]],
 ].map(([name, cuisine, style]) => ({ name, cuisine, style }));
 
+// Each restaurant's list icon is a 5×5 pixel tile: its colors scattered
+// with noise (not its logo). Unknown places get colors from their name.
+const BRAND_COLORS = {
+  "Taco Bell": ["#6a2c8f", "#e0218a", "#f5c400"],
+  "Chipotle": ["#451400", "#a81612", "#f3e6cd"],
+  "McDonald's": ["#da291c", "#ffc72c"],
+  "Whataburger": ["#ff6c00", "#ffffff"],
+  "Chick-fil-A": ["#dd0033", "#ffffff"],
+  "Raising Cane's": ["#e2231a", "#ffd200", "#ffffff"],
+  "Torchy's Tacos": ["#1d1b1b", "#ffffff", "#d11f2e"],
+  "Panda Express": ["#d02030", "#1d1b1b", "#ffffff"],
+  "Subway": ["#008938", "#ffc600"],
+  "Jersey Mike's": ["#00205b", "#e31837", "#ffffff"],
+  "Five Guys": ["#c8102e", "#ffffff"],
+  "Wendy's": ["#e2203d", "#ffffff", "#199fda"],
+  "Sonic": ["#e40046", "#0072ce", "#ffd100"],
+  "Popeyes": ["#ff7900", "#ffffff", "#d90f2e"],
+  "Wingstop": ["#006938", "#1d1b1b", "#ffffff"],
+  "Domino's": ["#006491", "#e31837", "#ffffff"],
+  "Pizza Hut": ["#ee3a43", "#1d1b1b", "#ffffff"],
+  "Panera Bread": ["#4b7a3a", "#f1e9d2"],
+  "Starbucks": ["#00704a", "#ffffff", "#1e3932"],
+};
+const FALLBACK_SETS = [
+  ["#2a4fd6", "#f0a800", "#ffffff"], ["#189a6c", "#ec5a3a", "#ffffff"], ["#ec5a3a", "#f0a800", "#1d1b26"],
+  ["#4a66b8", "#189a6c", "#f6f2e8"], ["#8e44ad", "#f0a800", "#ffffff"], ["#d08f00", "#2a4fd6", "#f6f2e8"],
+];
+function hashStr(t) { let h = 2166136261; for (const c of String(t)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rng(seed) { return () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const tileCache = new Map();
+function pixelTile(name) {
+  const key = name || "No location";
+  if (tileCache.has(key)) return tileCache.get(key);
+  const h = hashStr(key.toLowerCase());
+  const colors = BRAND_COLORS[key] || FALLBACK_SETS[h % FALLBACK_SETS.length];
+  const rand = rng(h);
+  // first color dominates; the rest are sprinkled in as noise
+  const weights = colors.map((_, i) => i === 0 ? 0.55 : 0.45 / (colors.length - 1));
+  let rects = "";
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) {
+    let u = rand(), i = 0;
+    while (i < colors.length - 1 && u > weights[i]) { u -= weights[i]; i++; }
+    rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[i]}"/>`;
+  }
+  const svg = `<span class="tile" aria-hidden="true"><svg viewBox="0 0 5 5" shape-rendering="crispEdges">${rects}</svg></span>`;
+  tileCache.set(key, svg);
+  return svg;
+}
+
 const findPlace = name => PLACES.find(p => p.name.toLowerCase() === String(name).trim().toLowerCase());
 const placeTags = p => [...p.cuisine, ...p.style];
 
@@ -860,7 +929,8 @@ function normalize(p, id) {
     cost: clamp(Math.round(+p.cost || 0), 0, 10),
     portion: clamp(Math.round(+p.portion || 0), 0, 10),
     taste: clamp(Math.round(+p.taste || 0), 0, 10),
-    type: String(p.type ?? "").trim().toLowerCase().slice(0, 30),
+    types: [...new Set((toList(p.types).length ? toList(p.types) : [p.type])
+              .map(t => String(t ?? "").trim().toLowerCase().slice(0, 30)).filter(Boolean))].slice(0, 5),
     cuisine: toList(p.cuisine).map(k => String(k).toLowerCase()).filter(k => CUISINES.includes(k)).slice(0, 10),
     style: toList(p.style).map(k => String(k).toLowerCase()).filter(k => STYLES.includes(k)).slice(0, 10),
     author: String(p.author ?? "").trim().slice(0, 40),
@@ -932,7 +1002,8 @@ async function saveReview(p, id = null) {
   const fields = {
     item: p.item,
     location: p.location || null,          // empty fields are left out
-    type: p.type,
+    types: p.types,
+    type: null,                             // older single-type field, cleared on save
     cuisine: p.cuisine.length ? p.cuisine : null,
     style: p.style.length ? p.style : null,
     author: p.author || null,
@@ -1090,17 +1161,14 @@ function drawAxes() {
    Foods that fail drop through the floor and fade out; they rise
    back when the filter is cleared. New filter types just add a test. */
 // Within a group a food needs any one of the picks; across groups it needs all of them.
-const sel = { type: new Set(), cuisine: new Set(), style: new Set() };
-const groupTest = key => p => {
-  const vals = key === "type" ? [p.type] : p[key];
-  return [...sel[key]].some(v => vals.includes(v));
-};
+const sel = { types: new Set(), cuisine: new Set(), style: new Set() };
+const groupTest = key => p => [...sel[key]].some(v => p[key].includes(v));
 const filters = {
-  type:    { on: () => sel.type.size > 0,    test: groupTest("type") },
+  types:   { on: () => sel.types.size > 0,   test: groupTest("types") },
   cuisine: { on: () => sel.cuisine.size > 0, test: groupTest("cuisine") },
   style:   { on: () => sel.style.size > 0,   test: groupTest("style") },
 };
-const selectedCount = () => sel.type.size + sel.cuisine.size + sel.style.size;
+const selectedCount = () => sel.types.size + sel.cuisine.size + sel.style.size;
 const clearFilters = () => Object.values(sel).forEach(x => x.clear());
 const activeFilters = () => Object.values(filters).filter(f => f.on());
 const passes = p => activeFilters().every(f => f.test(p));
@@ -1340,7 +1408,7 @@ function openInfo(id) {
     ["Portion size", p.portion, AXES.z.color],
     ["Taste", p.taste, AXES.y.color],
   ].map(([n, v, c]) => `<div class="score-row"><span>${n}</span>${dotsHtml(v, c)}<span class="num">${v}/10</span></div>`).join("");
-  $("infoType").innerHTML = p.type ? `<span class="chip type">${esc(p.type)}</span>` : `<span class="none">Not set</span>`;
+  $("infoType").innerHTML = p.types.length ? p.types.map(t => `<span class="chip type">${esc(t)}</span>`).join("") : `<span class="none">Not set</span>`;
   const tags = [...p.cuisine, ...p.style];
   $("infoKw").innerHTML = tags.length
     ? tags.map(k => `<span class="chip">${esc(k)}</span>`).join("")
@@ -1506,15 +1574,42 @@ const locCombo = makeCombo(fLoc, $("suggest"), () => {
 });
 fLoc.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); fItem.focus(); } });
 
-// Food type: what the item itself is
+// Food type: what the item itself is. Several allowed (a Thai milk tea is a tea and a drink).
+const pickTypes = [];
+function renderTypeChips() {
+  $("typeChips").innerHTML = pickTypes.map(t =>
+    `<span class="chip type">${esc(t)}<button type="button" data-t="${esc(t)}" aria-label="Remove ${esc(t)}">&times;</button></span>`).join("");
+  fType.placeholder = pickTypes.length ? "Add another (optional)" : "e.g. tea, drink";
+}
+function addType(t) {
+  t = String(t).trim().toLowerCase().slice(0, 30);
+  if (t && !pickTypes.includes(t) && pickTypes.length < 5) pickTypes.push(t);
+  fType.value = ""; fType.classList.remove("bad");
+  renderTypeChips();
+}
+function setTypes(list) { pickTypes.length = 0; list.forEach(addType); renderTypeChips(); }
+$("typeChips").addEventListener("click", e => {
+  const b = e.target.closest("button[data-t]"); if (!b) return;
+  pickTypes.splice(pickTypes.indexOf(b.dataset.t), 1);
+  renderTypeChips(); fType.focus();
+});
 const typeCombo = makeCombo(fType, $("typeSuggest"), () => {
   const counts = new Map();
-  points.forEach(p => p.type && counts.set(p.type, (counts.get(p.type) || 0) + 1));
+  points.forEach(p => p.types.forEach(t => counts.set(t, (counts.get(t) || 0) + 1)));
   const extra = [...counts.keys()].filter(t => !FOOD_TYPES.includes(t));
-  return [...FOOD_TYPES, ...extra].map(t => ({ label: t, sub: counts.get(t) ? `${counts.get(t)} on the plot` : "" }));
-}, o => { fType.value = o.label; fType.classList.remove("bad"); });
+  return [...FOOD_TYPES, ...extra].filter(t => !pickTypes.includes(t))
+    .map(t => ({ label: t, sub: counts.get(t) ? `${counts.get(t)} on the plot` : "" }));
+}, o => { addType(o.label); setTimeout(() => fType.focus(), 0); });
 fType.addEventListener("input", () => fType.classList.remove("bad"));
-fType.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPoint(); } });
+fType.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (fType.value.trim()) addType(fType.value);   // a type that isn't in the list
+    else addPoint();
+  } else if (e.key === "Backspace" && !fType.value && pickTypes.length) {
+    pickTypes.pop(); renderTypeChips();
+  }
+});
 
 // ---- open / reset / save ----
 const fName = $("fName");
@@ -1534,6 +1629,7 @@ function resetForm() {
   fLoc.value = ""; fItem.value = ""; fType.value = "";
   try { fName.value = localStorage.getItem(NAME_KEY) || ""; } catch (e) { fName.value = ""; }
   fItem.classList.remove("bad"); fType.classList.remove("bad");
+  setTypes([]);
   setPicks([], []);
   $("formErr").hidden = true;
   Object.values(ratings).forEach(r => r.set(0));
@@ -1554,7 +1650,7 @@ function openEdit(id) {
   setMode(id);
   fLoc.value = p.location;
   fItem.value = p.item;
-  fType.value = p.type;
+  setTypes(p.types);
   fName.value = p.author;
   ratings.cost.set(p.cost);
   ratings.portion.set(p.portion);
@@ -1571,8 +1667,8 @@ async function addPoint() {
   if (saving) return;
   const item = fItem.value.trim();
   if (!item) { fItem.focus(); fItem.classList.add("bad"); return; }
-  const type = fType.value.trim().toLowerCase();
-  if (!type) { fType.focus(); fType.classList.add("bad"); return; }
+  if (fType.value.trim()) addType(fType.value);   // typed but not yet added
+  if (!pickTypes.length) { fType.focus(); fType.classList.add("bad"); return; }
   const location = fLoc.value.trim();
   const known = findPlace(location);
   // typed a known restaurant without picking it from the list: still use its tags
@@ -1583,7 +1679,7 @@ async function addPoint() {
     cost: ratings.cost.get(),
     portion: ratings.portion.get(),
     taste: ratings.taste.get(),
-    type,
+    types: [...pickTypes],
     cuisine: [...pickCuisine],
     style: [...pickStyle],
     author: fName.value,
@@ -1630,19 +1726,35 @@ function renderList() {
     listEl.appendChild(li);
     return;
   }
-  points.forEach(p => {
+  // group foods by restaurant: biggest groups first, foods without a location last
+  const groups = new Map();
+  points.forEach(p => { const k = p.location || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); });
+  const ordered = [...groups].sort((a, b) =>
+    (a[0] === "") - (b[0] === "") || b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  ordered.forEach(([loc, foods]) => {
+    const head = document.createElement("li");
+    head.className = "group" + (foods.some(passes) ? "" : " out");
+    head.innerHTML = `${pixelTile(loc)}<span class="gname"></span><span class="gcount">${foods.length}</span>`;
+    head.querySelector(".gname").textContent = loc || "No location";
+    listEl.appendChild(head);
+    foods.forEach(p => listEl.appendChild(foodRow(p)));
+  });
+  markListSelection();
+}
+
+function foodRow(p) {
     const li = document.createElement("li");
     li.className = "item" + (passes(p) ? "" : " out");
     if (!passes(p)) li.title = "Hidden by the current filter";
     li.dataset.id = p.id;
     li.tabIndex = 0;
-    li.innerHTML = `<span class="dot"></span>
+    li.innerHTML = `${pixelTile(p.location)}
       <span class="txt"><span class="name"></span><span class="where"></span></span>
       <span class="vals" title="Cost · Portion · Taste">${p.cost} · ${p.portion} · ${p.taste}</span>
       ${p.uid && p.uid === myUid ? `<button class="del" type="button" title="Delete your food">&times;</button>` : ""}`;
     li.querySelector(".name").textContent = p.item;
     li.querySelector(".name").title = p.item;
-    li.querySelector(".where").textContent = [p.location, p.type].filter(Boolean).join(" · ");
+    li.querySelector(".where").textContent = p.types.join(", ");
     li.addEventListener("mouseenter", () => { hoverId = p.id; li.classList.add("active"); });
     li.addEventListener("mouseleave", () => { hoverId = null; li.classList.remove("active"); });
     li.addEventListener("click", e => { if (!e.target.closest(".del") && passes(p)) focusPoint(p.id); });
@@ -1653,9 +1765,7 @@ function renderList() {
       try { await db.ref(PATH + "/" + p.id).remove(); }
       catch (e) { alert(writeErrorText(e)); }
     });
-    listEl.appendChild(li);
-  });
-  markListSelection();
+    return li;
 }
 renderList();
 setLive();
@@ -1690,7 +1800,7 @@ const valueScore = p => p.taste + p.portion - p.cost;
 // values present on the plot for one group, most common first
 function groupCounts(key) {
   const counts = new Map();
-  points.forEach(p => (key === "type" ? [p.type] : p[key]).filter(Boolean).forEach(v => counts.set(v, (counts.get(v) || 0) + 1)));
+  points.forEach(p => p[key].filter(Boolean).forEach(v => counts.set(v, (counts.get(v) || 0) + 1)));
   return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
@@ -1703,7 +1813,7 @@ function renderPill() {
   const pill = $("filterPill"), n = selectedCount();
   $("filterCount").hidden = !n; $("filterCount").textContent = n;
   if (!n) { pill.hidden = true; return; }
-  const parts = ["type", "cuisine", "style"].filter(k => sel[k].size).map(k => [...sel[k]].map(esc).join(" or "));
+  const parts = ["types", "cuisine", "style"].filter(k => sel[k].size).map(k => [...sel[k]].map(esc).join(" or "));
   pill.innerHTML = `Showing <b>${parts.join(" · ")}</b> · ${shownPoints().length} of ${points.length}<button type="button" id="pillClear">Clear</button>`;
   pill.hidden = false;
   $("pillClear").onclick = () => { clearFilters(); applyFilterChange(); };
@@ -1722,9 +1832,9 @@ function renderTools() {
     if (!c.length) return "";
     return `<div class="pick-group"><span class="pick-label">${title}</span>
       <div class="kw-pick" data-group="${key}">${c.map(([v, n]) =>
-        `<button type="button" data-k="${esc(v)}" class="${sel[key].has(v) ? (key === "type" ? "type-on" : "on") : ""}" aria-pressed="${sel[key].has(v)}">${esc(v)}<span>${n}</span></button>`).join("")}</div></div>`;
+        `<button type="button" data-k="${esc(v)}" class="${sel[key].has(v) ? (key === "types" ? "type-on" : "on") : ""}" aria-pressed="${sel[key].has(v)}">${esc(v)}<span>${n}</span></button>`).join("")}</div></div>`;
   };
-  const groupsHtml = group("type", "Food type") + group("cuisine", "Cuisine") + group("style", "Style");
+  const groupsHtml = group("types", "Food type") + group("cuisine", "Cuisine") + group("style", "Style");
   const filterCard = `<div class="tool">
     <h3>Filter <small>${selectedCount() ? `${s.length} of ${points.length} shown` : "tap to filter"}</small></h3>
     ${groupsHtml || `<div class="empty-note">Add some foods to filter by type, cuisine and style.</div>`}
