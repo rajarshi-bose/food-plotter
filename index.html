@@ -166,7 +166,7 @@
   .info .loc { font-size: 13px; color: var(--muted); margin-top: 2px; }
   .info .loc:empty { display: none; }
   .info .by { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
-  .info .by svg { width: 13px; height: 13px; flex: none; }
+  .info .by .tile { width: 13px; height: 13px; border-radius: 3px; }
   .info .scores { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
   .score-row { display: grid; grid-template-columns: 76px auto 1fr; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
   .score-row .num { text-align: right; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
@@ -574,7 +574,7 @@
       </div>
       <h3 id="infoName"></h3>
       <div class="loc" id="infoLoc"></div>
-      <div class="by"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5c0-3.2 2.7-5 6-5s6 1.8 6 5z"/></svg><span id="infoBy"></span></div>
+      <div class="by"><span id="infoAvatar"></span><span id="infoBy"></span></div>
       <div class="scores" id="infoScores"></div>
       <div class="kw-head">Food type</div>
       <div class="chips" id="infoType"></div>
@@ -672,6 +672,10 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.13", d: "Oct 22, 2026", n: [
+    "The selected point turns red with a soft glow",
+    "Reviewers get a small pixel icon of their own instead of the person symbol",
+    "Food points are slightly smaller"] },
   { v: "1.12", d: "Oct 22, 2026", n: ["Added box combo as a food type"] },
   { v: "1.11", d: "Oct 22, 2026", n: [
     "Food type is picked with the same tap-to-toggle chips as cuisine and style",
@@ -1044,6 +1048,8 @@ const AXES = {
 };
 const POINT_FILL = "#4a66b8";
 const POINT_EDGE = "#34498a";
+const SELECTED_FILL = "#ec5a3a";   // the open point turns tomato red
+const SELECTED_EDGE = "#b8381d";
 const TICKS = 5;
 
 // Rotation is limited to one quadrant so the back walls never flip.
@@ -1179,7 +1185,7 @@ const vis = new Map();   // id -> 0..1, eased toward 1 (shown) or 0 (filtered ou
 
 let hits = [];  // screen positions of points from the last frame, for clicking
 function pointRadius(scr, emphasized) {
-  return (emphasized ? 8.5 : 7) * view.zoom * (scr.s / baseScale());
+  return (emphasized ? 7 : 5.5) * view.zoom * (scr.s / baseScale());
 }
 
 function drawPoints() {
@@ -1217,18 +1223,24 @@ function drawPoints() {
     if (v > 0.6) hits.push({ id: p.id, x: scr.x, y: scr.y, r, depth: scr.depth });
     ctx.globalAlpha = Math.pow(v, 1.4);
 
-    if (sel) { // soft ring around the open point
+    if (sel) { // soft red glow around the open point
       ctx.beginPath();
-      ctx.arc(scr.x, scr.y, r + 5, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(74, 102, 184, 0.18)";
+      ctx.arc(scr.x, scr.y, r + 6, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(236, 90, 58, 0.16)";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(scr.x, scr.y, r + 3, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(236, 90, 58, 0.22)";
       ctx.fill();
     }
     ctx.beginPath();
     ctx.arc(scr.x, scr.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = POINT_FILL;                 // flat, matte: no gradient or shine
+    if (sel) { ctx.shadowColor = "rgba(236, 90, 58, .6)"; ctx.shadowBlur = 10; }
+    ctx.fillStyle = sel ? SELECTED_FILL : POINT_FILL;   // flat, matte: no gradient or shine
     ctx.fill();
+    ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
     ctx.lineWidth = emph ? 2 : 1.25;
-    ctx.strokeStyle = emph ? "#1d1b26" : POINT_EDGE;
+    ctx.strokeStyle = sel ? SELECTED_EDGE : emph ? "#1d1b26" : POINT_EDGE;
     ctx.stroke();
 
     ctx.font = (emph ? "700 " : "600 ") + "12px 'Schibsted Grotesk'";
@@ -1404,6 +1416,8 @@ function openInfo(id) {
   $("infoName").textContent = p.item;
   $("infoLoc").textContent = p.location;
   $("infoBy").textContent = p.author || "Anonymous user";
+  // each reviewer's own pixel scramble: named reviewers by name, anonymous ones by their browser
+  $("infoAvatar").outerHTML = `<span id="infoAvatar">${pixelTile("@" + (p.author ? p.author.toLowerCase() : "anon:" + (p.uid || "")))}</span>`;
   $("infoEdit").hidden = !(p.uid && p.uid === myUid);
   $("infoScores").innerHTML = [
     ["Cost", p.cost, AXES.x.color],
