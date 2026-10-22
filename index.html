@@ -11,6 +11,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@700&display=swap">
 <link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Schibsted+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js" defer></script>
 <style>
   :root {
     --bg: #f6f2e8;
@@ -299,7 +302,32 @@
     padding-top: 4px;
     border-top: 1px solid var(--line);
   }
-  .list-head span { font-family: "Schibsted Grotesk", sans-serif; color: var(--muted); font-size: 12px; }
+  .list-head > span { font-family: "Schibsted Grotesk", sans-serif; color: var(--muted); font-size: 12px; }
+  .live {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: "Schibsted Grotesk", sans-serif; font-size: 11.5px; color: var(--muted);
+  }
+  .live i { width: 7px; height: 7px; border-radius: 50%; background: #b9b3a5; display: block; }
+  .live.ok i { background: var(--green); box-shadow: 0 0 0 3px rgba(24, 154, 108, .15); }
+  .live.warn i { background: var(--yellow); }
+  .live.bad i { background: var(--red); }
+  .notice {
+    font-size: 12.5px; line-height: 1.4;
+    padding: 9px 11px;
+    border-radius: 9px;
+    background: #fdf4dc; border: 1px solid #f0d98f;
+  }
+  .notice[hidden] { display: none; }
+  .notice.err { background: #fde9e4; border-color: #f3b9a9; }
+  .notice .row { display: flex; gap: 6px; margin-top: 7px; }
+  .notice button {
+    font: 600 12px "Schibsted Grotesk", sans-serif;
+    padding: 5px 10px; border-radius: 7px; cursor: pointer;
+    border: 1.5px solid var(--ink); background: #fff;
+  }
+  .notice button.primary { background: var(--ink); color: #fff; }
+  .btn-save:disabled { opacity: .6; cursor: progress; }
+  .list .mine { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--point); font-weight: 700; }
   .list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
   .list li.item {
     display: flex; align-items: center; gap: 8px;
@@ -441,13 +469,15 @@
         <div class="chips" id="formKw"></div>
         <input type="text" id="fKw" maxlength="30" placeholder="Add a keyword, press Enter" autocomplete="off">
       </div>
+      <div class="notice err" id="formErr" hidden></div>
       <div class="form-actions">
         <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
         <button type="button" class="btn-save" id="saveBtn">Add</button>
       </div>
     </div>
 
-    <div class="list-head">Foods <span id="count">0</span></div>
+    <div class="list-head">Foods <span class="live" id="live"><i></i><b id="liveText">Connecting…</b> · <span id="count">0</span></span></div>
+    <div class="notice" id="localNotice" hidden></div>
     <ul class="list" id="list"></ul>
   </aside>
 </main>
@@ -465,6 +495,11 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.5", d: "Oct 22, 2026", n: [
+    "Foods are now shared: anyone can add one, and everyone sees every addition live",
+    "Only the person who added a food can delete it",
+    "A Live / Offline dot next to Foods shows whether you're connected",
+    "Foods saved only in your browser by earlier versions can be shared with one click"] },
   { v: "1.4", d: "Oct 22, 2026", n: [
     "New add form: location, item name, and 0–10 circle ratings for cost, portion size and taste",
     "Typing a location suggests restaurants; picking one fills in its keywords, and you can add your own",
@@ -605,39 +640,140 @@ const PLACES = [
 const findPlace = name => PLACES.find(p => p.name.toLowerCase() === String(name).trim().toLowerCase());
 
 /* =========================================================
-   3. Saved points (kept in this browser's localStorage)
+   3. Shared reviews (Firebase Realtime Database)
+      Everyone reads /reviews live. Each browser signs in
+      anonymously, so the database knows who added what:
+      anyone can add, only the author can delete.
    ========================================================= */
-const STORE_KEY = "foodPlotter.points.v2";
-const OLD_KEY = "foodPlotter.points.v1";
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDNf7PcX3Svs-jCA-Jq0ruwfAo1qmjPn1g",
+  authDomain: "food-plotter.firebaseapp.com",
+  databaseURL: "https://food-plotter-default-rtdb.firebaseio.com",
+  projectId: "food-plotter",
+  storageBucket: "food-plotter.firebasestorage.app",
+  messagingSenderId: "474112913592",
+  appId: "1:474112913592:web:385f2302f2c52d5ac0c44d",
+};
+const LOCAL_KEYS = ["foodPlotter.points.v2", "foodPlotter.points.v1"];  // older browser-only saves
 
-function normalize(p) {
+const toList = v => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.values(v) : []);
+function normalize(p, id) {
   return {
-    id: p.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    item: String(p.item ?? p.name ?? "").trim() || "Untitled",
-    location: String(p.location ?? "").trim(),
+    id: id || p.id || "",
+    item: String(p.item ?? p.name ?? "").trim().slice(0, 60) || "Untitled",
+    location: String(p.location ?? "").trim().slice(0, 60),
     cost: clamp(Math.round(+p.cost || 0), 0, 10),
     portion: clamp(Math.round(+p.portion || 0), 0, 10),
     taste: clamp(Math.round(+p.taste || 0), 0, 10),
-    keywords: Array.isArray(p.keywords) ? p.keywords.map(String) : [],
+    keywords: toList(p.keywords).map(k => String(k).slice(0, 30)).filter(Boolean).slice(0, 20),
+    uid: p.uid || null,
+    createdAt: +p.createdAt || 0,
   };
 }
-function loadPoints() {
-  try {
-    let raw = localStorage.getItem(STORE_KEY);
-    if (!raw) raw = localStorage.getItem(OLD_KEY); // carry over foods from earlier versions
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr.map(normalize) : [];
-  } catch (e) { return []; }
-}
-function savePoints() {
-  // if storage is blocked (private mode, sandboxed preview), points still live for this visit
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(points)); } catch (e) {}
-}
 
-let points = loadPoints();
-savePoints();
+let points = [];
 let hoverId = null;      // list hover highlight
 let selectedId = null;   // point whose info window is open
+let db = null, myUid = null, connected = false, loaded = false, readError = null;
+
+function setLive() {
+  const el = $("live"), t = $("liveText");
+  el.className = "live";
+  if (readError) { el.classList.add("bad"); t.textContent = "Can't load"; el.title = readError; return; }
+  el.title = "";
+  if (!loaded) { t.textContent = "Connecting…"; return; }
+  if (!connected) { el.classList.add("warn"); t.textContent = "Offline"; el.title = "Reconnecting — new foods will sync when you're back online"; return; }
+  el.classList.add("ok"); t.textContent = "Live";
+}
+
+function startFirebase() {
+  if (!window.firebase || !firebase.database) {
+    readError = "Couldn't reach the shared database. Check your connection and refresh.";
+    setLive(); return;
+  }
+  const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+  db = app.database();
+
+  db.ref(".info/connected").on("value", s => { connected = !!s.val(); setLive(); });
+
+  db.ref("reviews").orderByChild("createdAt").on("value", snap => {
+    const next = [];
+    snap.forEach(c => { next.push(normalize(c.val() || {}, c.key)); });
+    points = next;
+    loaded = true; readError = null;
+    if (selectedId && !points.some(p => p.id === selectedId)) closeInfo();
+    renderList(); setLive();
+  }, err => {
+    readError = err && err.code === "PERMISSION_DENIED"
+      ? "The database rules haven't been set up yet."
+      : "Couldn't load shared foods (" + (err && err.message || "unknown error") + ").";
+    loaded = true; setLive(); renderList();
+  });
+
+  app.auth().onAuthStateChanged(u => { myUid = u ? u.uid : null; renderList(); updateLocalNotice(); });
+  app.auth().signInAnonymously().catch(() => { myUid = null; });
+}
+
+async function ensureUser() {
+  if (myUid) return myUid;
+  if (!window.firebase || !db) throw new Error("not connected");
+  const cred = await firebase.auth().signInAnonymously();
+  myUid = cred.user.uid;
+  return myUid;
+}
+
+async function saveReview(p) {
+  const uid = await ensureUser();
+  const ref = db.ref("reviews").push();
+  await ref.set({
+    item: p.item,
+    location: p.location || null,          // empty fields are left out
+    keywords: p.keywords.length ? p.keywords : null,
+    cost: p.cost, portion: p.portion, taste: p.taste,
+    uid,
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+  });
+  return ref.key;
+}
+
+function writeErrorText(e) {
+  const code = (e && (e.code || e.message) || "").toLowerCase();
+  if (code.includes("permission")) return "The database refused this food. Make sure the rules are published.";
+  if (code.includes("operation-not-allowed") || code.includes("admin-restricted")) return "Anonymous sign-in isn't turned on in Firebase yet.";
+  if (code.includes("network") || code.includes("not connected")) return "You're offline. Try again once you're connected.";
+  return "Couldn't save: " + (e && e.message || "unknown error");
+}
+
+// ---- foods saved only in this browser by earlier versions ----
+function readLocal() {
+  for (const k of LOCAL_KEYS) {
+    try { const raw = localStorage.getItem(k); if (raw) { const a = JSON.parse(raw); if (Array.isArray(a) && a.length) return a.map(x => normalize(x)); } } catch (e) {}
+  }
+  return [];
+}
+function clearLocal() { LOCAL_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} }); }
+
+function updateLocalNotice() {
+  const box = $("localNotice");
+  const local = readLocal();
+  if (!local.length || !db) { box.hidden = true; return; }
+  const n = local.length;
+  box.className = "notice";
+  box.innerHTML = `${n} food${n === 1 ? " is" : "s are"} saved only in this browser.
+    <div class="row"><button class="primary" type="button" id="shareLocal">Share ${n === 1 ? "it" : "them"}</button><button type="button" id="dropLocal">Discard</button></div>`;
+  box.hidden = false;
+  $("shareLocal").onclick = async () => {
+    $("shareLocal").disabled = true; $("shareLocal").textContent = "Sharing…";
+    try {
+      for (const p of local) await saveReview(p);
+      clearLocal(); box.hidden = true;
+    } catch (e) {
+      box.className = "notice err";
+      box.textContent = writeErrorText(e);
+    }
+  };
+  $("dropLocal").onclick = () => { clearLocal(); box.hidden = true; };
+}
 
 /* =========================================================
    4. 3D plotter (plain canvas, no libraries)
@@ -1141,6 +1277,7 @@ function resetForm() {
   fLoc.value = ""; fItem.value = ""; fKw.value = "";
   fItem.classList.remove("bad");
   placeKw = []; ownKw = [];
+  $("formErr").hidden = true;
   Object.values(ratings).forEach(r => r.set(0));
   renderFormKw();
   hideSuggest();
@@ -1153,7 +1290,9 @@ addBtn.addEventListener("click", () => {
 });
 $("cancelBtn").addEventListener("click", () => { form.hidden = true; resetForm(); });
 
-function addPoint() {
+let saving = false;
+async function addPoint() {
+  if (saving) return;
   const item = fItem.value.trim();
   if (!item) { fItem.focus(); fItem.classList.add("bad"); return; }
   const location = fLoc.value.trim();
@@ -1168,11 +1307,19 @@ function addPoint() {
     taste: ratings.taste.get(),
     keywords,
   });
-  points.push(p);
-  savePoints();
-  renderList();
-  resetForm();
-  form.hidden = true;
+  const btn = $("saveBtn"), err = $("formErr");
+  err.hidden = true;
+  saving = true; btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    await saveReview(p);         // the live listener adds it to the plot for everyone
+    resetForm();
+    form.hidden = true;
+  } catch (e) {
+    err.textContent = writeErrorText(e);
+    err.hidden = false;
+  } finally {
+    saving = false; btn.disabled = false; btn.textContent = "Add";
+  }
 }
 $("saveBtn").addEventListener("click", addPoint);
 fItem.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addPoint(); } });
@@ -1193,7 +1340,7 @@ function renderList() {
   if (!points.length) {
     const li = document.createElement("li");
     li.className = "empty";
-    li.textContent = "No foods yet — add one!";
+    li.textContent = readError ? readError : !loaded ? "Loading shared foods…" : "No foods yet — add the first one!";
     listEl.appendChild(li);
     return;
   }
@@ -1205,7 +1352,7 @@ function renderList() {
     li.innerHTML = `<span class="dot"></span>
       <span class="txt"><span class="name"></span><span class="where"></span></span>
       <span class="vals" title="Cost · Portion · Taste">${p.cost} · ${p.portion} · ${p.taste}</span>
-      <button class="del" type="button" title="Remove">&times;</button>`;
+      ${p.uid && p.uid === myUid ? `<button class="del" type="button" title="Delete your food">&times;</button>` : ""}`;
     li.querySelector(".name").textContent = p.item;
     li.querySelector(".name").title = p.item;
     li.querySelector(".where").textContent = p.location;
@@ -1213,18 +1360,21 @@ function renderList() {
     li.addEventListener("mouseleave", () => { hoverId = null; li.classList.remove("active"); });
     li.addEventListener("click", e => { if (!e.target.closest(".del")) focusPoint(p.id); });
     li.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === li) focusPoint(p.id); });
-    li.querySelector(".del").addEventListener("click", () => {
-      points = points.filter(q => q.id !== p.id);
-      if (selectedId === p.id) closeInfo();
-      hoverId = null;
-      savePoints();
-      renderList();
+    const del = li.querySelector(".del");
+    if (del) del.addEventListener("click", async () => {
+      if (!confirm(`Delete "${p.item}" for everyone?`)) return;
+      try { await db.ref("reviews/" + p.id).remove(); }
+      catch (e) { alert(writeErrorText(e)); }
     });
     listEl.appendChild(li);
   });
   markListSelection();
 }
 renderList();
+setLive();
+// the Firebase SDK scripts are deferred; start once the page has parsed them
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startFirebase);
+else startFirebase();
 
 /* =========================================================
    8. Version + fixes log
