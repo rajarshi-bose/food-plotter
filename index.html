@@ -392,6 +392,34 @@
   .stats-btn[aria-expanded="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
   .stats-btn .count { font-size: 10.5px; background: var(--blue); color: #fff; border-radius: 999px; padding: 1px 6px; }
   .stats-btn .count[hidden] { display: none; }
+  canvas.flat { cursor: default; }
+  canvas.flat.over-point { cursor: pointer; }
+  .back3d {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: 600 12.5px "Schibsted Grotesk", sans-serif;
+    padding: 5px 11px 5px 6px;
+    background: #fff; color: var(--ink);
+    border: 1.5px solid var(--ink); border-radius: 8px;
+    box-shadow: 2px 2px 0 var(--ink);
+    cursor: pointer;
+  }
+  .back3d[hidden] { display: none; }
+  .back3d span { background: var(--ink); color: #fff; border-radius: 5px; padding: 1px 7px; font-size: 11.5px; }
+  .back3d:hover span { background: var(--blue); }
+  .view-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .view-pick button {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    font: 600 12.5px "Schibsted Grotesk", sans-serif;
+    padding: 8px 10px; text-align: left;
+    border: 1.5px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink);
+    cursor: pointer;
+  }
+  .view-pick button small { font-weight: 400; font-size: 11px; color: var(--muted); }
+  .view-pick button:hover { border-color: var(--ink); }
+  .view-pick button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .view-pick button.on small { color: rgba(255,255,255,.7); }
+  .view-pick .axes { display: flex; gap: 4px; align-items: center; }
+  .view-pick .axes i { width: 8px; height: 8px; border-radius: 50%; display: block; }
   .filter-pill {
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
     font-size: 12px;
@@ -691,9 +719,10 @@
         </svg>
         Stats &amp; filters <span class="count" id="filterCount" hidden>0</span>
       </button>
+      <button class="back3d" id="back3d" type="button" hidden><span>&larr; 3D</span><b></b></button>
       <div class="filter-pill" id="filterPill" hidden></div>
     </div>
-    <div class="hint">Drag to rotate · scroll to zoom · click a point for details · double-click to reset</div>
+    <div class="hint" id="plotHint">Drag to rotate · scroll to zoom · click a point for details · double-click to reset</div>
   </div>
 
   <aside class="card panel">
@@ -782,6 +811,10 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.17", d: "Oct 22, 2026", n: [
+    "New 2D views in Stats & filters: Taste vs Portion size, Taste vs Cost, and Portion size vs Cost",
+    "The 3D cube fades out and a flat chart rises in, with the same filters, details windows and a dashed trend line",
+    "A Back to 3D button on the plot returns to the cube"] },
   { v: "1.16", d: "Oct 22, 2026", n: ["Cleaner Admin window: a status card, numbered setup steps and buttons grouped at the bottom"] },
   { v: "1.15", d: "Oct 22, 2026", n: [
     "New Admin button next to Fixes: the site owner can sign in with Google and delete any food",
@@ -1400,7 +1433,7 @@ function drawAxes() {
   line([-1, -1, 1], [1, -1, 1], AXES.x.color, 3);    // Cost: front floor edge
   line([1, -1, -1], [1, -1, 1], AXES.z.color, 3);    // Portion: other front floor edge
   line([-1, -1, -1], [-1, 1, -1], AXES.y.color, 3);  // Taste: back corner
-  ctx.globalAlpha = 0.8;
+  ctx.globalAlpha = 0.8 * LA;
   for (let i = 0; i <= TICKS; i++) {
     const t = -1 + (2 * i) / TICKS;
     const v = String((i * 10) / TICKS);
@@ -1408,7 +1441,7 @@ function drawAxes() {
     label([1 + pad, -1.02, t], v, AXES.z.color, "11px 'Schibsted Grotesk'");
     label([-1 - pad * 0.8, t, -1 - pad * 0.8], v, AXES.y.color, "11px 'Schibsted Grotesk'");
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = LA;
   const title = "700 14px 'Schibsted Grotesk'";
   label([0, -1.08, 1.6], AXES.x.name, AXES.x.color, title);
   label([1.6, -1.08, 0], AXES.z.name, AXES.z.color, title);
@@ -1439,15 +1472,21 @@ function pointRadius(scr, emphasized) {
   return (emphasized ? 7 : 5.5) * view.zoom * (scr.s / baseScale());
 }
 
-function drawPoints() {
-  const ease = reduceMotion ? 1 : 0.11;
-  const drawn = [];
+function updateVis() {
+  const k = reduceMotion ? 1 : 0.11;
   for (const p of points) {
     const target = passes(p) ? 1 : 0;
     let v = vis.has(p.id) ? vis.get(p.id) : target;
-    v += (target - v) * ease;
+    v += (target - v) * k;
     if (Math.abs(target - v) < 0.002) v = target;
     vis.set(p.id, v);
+  }
+}
+
+function drawPoints() {
+  const drawn = [];
+  for (const p of points) {
+    const v = vis.get(p.id) ?? 1;
     if (v < 0.01) continue;
     const base = posOf(p);
     // filtered-out foods fall through the floor as they fade
@@ -1472,7 +1511,7 @@ function drawPoints() {
     const emph = sel || p.id === hoverId;
     const r = pointRadius(scr, emph);
     if (v > 0.6) hits.push({ id: p.id, x: scr.x, y: scr.y, r, depth: scr.depth });
-    ctx.globalAlpha = Math.pow(v, 1.4);
+    ctx.globalAlpha = Math.pow(v, 1.4) * LA;
 
     if (sel) { // soft red glow around the open point
       ctx.beginPath();
@@ -1502,7 +1541,7 @@ function drawPoints() {
     ctx.strokeText(p.item, scr.x + r + 5, scr.y);
     ctx.fillStyle = "#1d1b26";
     ctx.fillText(p.item, scr.x + r + 5, scr.y);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = LA;
   });
 
   if (showAvg) drawAverage();
@@ -1529,11 +1568,187 @@ function drawAverage() {
 }
 let showAvg = false;
 
+/* ---------- 2D views ----------
+   Picking a pair in the drawer fades the cube out and pulls up a flat
+   chart of the same foods, with the same filters and drop-out animation. */
+const DIM = {
+  cost:    { name: "Cost",         color: "#189a6c" },
+  portion: { name: "Portion size", color: "#d08f00" },
+  taste:   { name: "Taste",        color: "#ec5a3a" },
+};
+const PAIRS = {
+  "portion-taste": { x: "portion", y: "taste",   label: "Taste vs Portion size" },
+  "cost-taste":    { x: "cost",    y: "taste",   label: "Taste vs Cost" },
+  "cost-portion":  { x: "cost",    y: "portion", label: "Portion size vs Cost" },
+};
+let pairKey = null;      // which 2D view is wanted (null = 3D)
+let shownPair = null;    // the pair being drawn (kept while fading back to 3D)
+let mix = 0;             // 0 = 3D, 1 = 2D
+let LA = 1;              // alpha for the 3D layer
+
+function setView2D(key) {
+  pairKey = key && PAIRS[key] ? key : null;
+  if (pairKey) shownPair = pairKey;
+  closeInfo();
+  canvas.classList.toggle("flat", !!pairKey);
+  $("back3d").hidden = !pairKey;
+  $("back3d").querySelector("b").textContent = pairKey ? PAIRS[pairKey].label : "";
+  $("plotHint").textContent = pairKey
+    ? "Click a point for details"
+    : "Drag to rotate · scroll to zoom · click a point for details · double-click to reset";
+  renderTools();
+}
+
+function frame2D() {
+  const L = 62, R = 34, T = 66, B = 58;
+  return { x0: L, x1: W - R, y0: T, y1: H - B };
+}
+function to2D(f, vx, vy) {
+  // pad the 0–10 range by half a step so points never sit on the frame
+  const px = f.x0 + ((vx + 0.5) / 11) * (f.x1 - f.x0);
+  const py = f.y1 - ((vy + 0.5) / 11) * (f.y1 - f.y0);
+  return [px, py];
+}
+
+function draw2D(t) {
+  const pair = PAIRS[shownPair];
+  if (!pair) return;
+  const xd = DIM[pair.x], yd = DIM[pair.y];
+  const f = frame2D();
+  const lift = (1 - t) * 28;            // the chart rises into place as it fades in
+  ctx.save();
+  ctx.globalAlpha = t;
+  ctx.translate(0, lift);
+
+  // panel + grid
+  ctx.fillStyle = "rgba(255, 255, 255, .7)";
+  ctx.fillRect(f.x0, f.y0, f.x1 - f.x0, f.y1 - f.y0);
+  ctx.lineWidth = 1;
+  for (let v = 0; v <= 10; v += 2) {
+    const [gx] = to2D(f, v, 0), [, gy] = to2D(f, 0, v);
+    ctx.strokeStyle = "rgba(29, 27, 38, .08)";
+    ctx.beginPath(); ctx.moveTo(gx, f.y0); ctx.lineTo(gx, f.y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(f.x0, gy); ctx.lineTo(f.x1, gy); ctx.stroke();
+    ctx.font = "11px 'Schibsted Grotesk'";
+    ctx.fillStyle = xd.color; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText(String(v), gx, f.y1 + 7);
+    ctx.fillStyle = yd.color; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.fillText(String(v), f.x0 - 8, gy);
+  }
+  // axes in their colors
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = xd.color; ctx.beginPath(); ctx.moveTo(f.x0, f.y1); ctx.lineTo(f.x1, f.y1); ctx.stroke();
+  ctx.strokeStyle = yd.color; ctx.beginPath(); ctx.moveTo(f.x0, f.y1); ctx.lineTo(f.x0, f.y0); ctx.stroke();
+  ctx.font = "700 14px 'Schibsted Grotesk'";
+  ctx.fillStyle = xd.color; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.fillText(xd.name, (f.x0 + f.x1) / 2, f.y1 + 26);
+  ctx.save();
+  ctx.translate(f.x0 - 40, (f.y0 + f.y1) / 2); ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = yd.color; ctx.textBaseline = "middle";
+  ctx.fillText(yd.name, 0, 0);
+  ctx.restore();
+
+  // trend line + r for the foods shown
+  const s = shownPoints();
+  if (s.length >= 3) {
+    const xs = s.map(p => p[pair.x]), ys = s.map(p => p[pair.y]);
+    const mx = mean(xs), my = mean(ys);
+    let sxx = 0, sxy = 0;
+    xs.forEach((x, i) => { sxx += (x - mx) ** 2; sxy += (x - mx) * (ys[i] - my); });
+    const rr = pearson(xs, ys);
+    if (sxx > 0 && rr !== null) {
+      const m = sxy / sxx, b = my - m * mx;
+      // clip the line to the 0–10 box
+      const pts = [];
+      for (const xv of [0, 10]) { const yv = m * xv + b; if (yv >= 0 && yv <= 10) pts.push([xv, yv]); }
+      if (m !== 0) for (const yv of [0, 10]) { const xv = (yv - b) / m; if (xv > 0 && xv < 10) pts.push([xv, yv]); }
+      if (pts.length >= 2) {
+        const [a1, a2] = pts.sort((u, v) => u[0] - v[0]);
+        const [p1x, p1y] = to2D(f, ...a1), [p2x, p2y] = to2D(f, ...a2);
+        ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(29, 27, 38, .35)";
+        ctx.beginPath(); ctx.moveTo(p1x, p1y); ctx.lineTo(p2x, p2y); ctx.stroke(); ctx.setLineDash([]);
+      }
+      ctx.font = "600 12px 'Schibsted Grotesk'"; ctx.textAlign = "right"; ctx.textBaseline = "top";
+      ctx.fillStyle = "rgba(29, 27, 38, .55)";
+      ctx.fillText(`trend · r = ${rr >= 0 ? "+" : "−"}${fmt(Math.abs(rr), 2)}`, f.x1 - 8, f.y0 + 8);
+    }
+  }
+
+  // points: identical ratings fan out in a small ring so none hide behind another
+  const groups = new Map();
+  points.forEach(p => {
+    const k = p[pair.x] + "," + p[pair.y];
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(p);
+  });
+  const hits2 = [];
+  const drawn = [];
+  groups.forEach(list => list.forEach((p, i) => {
+    const v = vis.get(p.id) ?? 1;
+    if (v < 0.01) return;
+    let [x, y] = to2D(f, p[pair.x], p[pair.y]);
+    if (list.length > 1) { const a = (i / list.length) * Math.PI * 2 - Math.PI / 2; x += Math.cos(a) * 8; y += Math.sin(a) * 8; }
+    y += (1 - v) * 46;                  // filtered-out foods drop away
+    drawn.push({ p, v, x, y });
+  }));
+  drawn.sort((a, b) => (a.p.id === selectedId) - (b.p.id === selectedId));
+  drawn.forEach(({ p, v, x, y }) => {
+    const sel = p.id === selectedId, emph = sel || p.id === hoverId;
+    const r = emph ? 7 : 5.5;
+    if (v > 0.6) hits2.push({ id: p.id, x, y: y + lift, r });
+    ctx.globalAlpha = t * Math.pow(v, 1.4);
+    if (sel) {
+      ctx.beginPath(); ctx.arc(x, y, r + 6, 0, Math.PI * 2); ctx.fillStyle = "rgba(236, 90, 58, 0.16)"; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.fillStyle = "rgba(236, 90, 58, 0.22)"; ctx.fill();
+      ctx.shadowColor = "rgba(236, 90, 58, .6)"; ctx.shadowBlur = 10;
+    }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = sel ? SELECTED_FILL : POINT_FILL; ctx.fill();
+    ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
+    ctx.lineWidth = emph ? 2 : 1.25;
+    ctx.strokeStyle = sel ? SELECTED_EDGE : emph ? "#1d1b26" : POINT_EDGE; ctx.stroke();
+    ctx.font = (emph ? "700 " : "600 ") + "12px 'Schibsted Grotesk'";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.9)";
+    ctx.strokeText(p.item, x + r + 5, y);
+    ctx.fillStyle = "#1d1b26"; ctx.fillText(p.item, x + r + 5, y);
+  });
+
+  // average point
+  if (showAvg && s.length) {
+    ctx.globalAlpha = t;
+    const [ax, ay] = to2D(f, mean(s.map(p => p[pair.x])), mean(s.map(p => p[pair.y])));
+    const r = 8;
+    ctx.beginPath(); ctx.moveTo(ax, ay - r); ctx.lineTo(ax + r, ay); ctx.lineTo(ax, ay + r); ctx.lineTo(ax - r, ay); ctx.closePath();
+    ctx.fillStyle = "rgba(255, 255, 255, .85)"; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = "#1d1b26"; ctx.stroke();
+    ctx.font = "700 12px 'Schibsted Grotesk'"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.strokeText("Average", ax + r + 6, ay);
+    ctx.fillStyle = "#1d1b26"; ctx.fillText("Average", ax + r + 6, ay);
+  }
+  ctx.restore();
+  if (t > 0.5) hits = hits2;
+}
+
 function draw() {
+  // ease between the 3D cube and the 2D chart
+  const target = pairKey ? 1 : 0;
+  mix = reduceMotion ? target : mix + (target - mix) * 0.12;
+  if (Math.abs(target - mix) < 0.003) mix = target;
+  if (!pairKey && mix === 0) shownPair = null;
+  const t = ease(mix);
+  updateVis();
+
   ctx.clearRect(0, 0, W, H);
-  drawGrid();
-  drawAxes();
-  drawPoints();
+  LA = 1 - t;
+  if (LA > 0.001) {
+    ctx.globalAlpha = LA;
+    drawGrid();
+    drawAxes();
+    drawPoints();
+    ctx.globalAlpha = 1;
+  }
+  if (t > 0.001) draw2D(t);
   placeInfo();
 }
 
@@ -1556,6 +1771,7 @@ function focusPoint(id) {
   const p = points.find(q => q.id === id);
   if (!p) return;
   closeInfo();
+  if (pairKey) { openInfo(id); return; }   // everything is already visible in 2D
   const [x, y, z] = posOf(p);
   animateView({
     // turn slightly toward the point's side of the cube, tilt toward its height
@@ -1595,7 +1811,7 @@ canvas.addEventListener("pointermove", e => {
     return;
   }
   moved = Math.max(moved, Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y));
-  if (moved < 4) return;           // still a click, not a drag
+  if (moved < 4 || pairKey) return;   // a click (or a flat 2D view, which doesn't rotate)
   canvas.classList.add("dragging");
   const k = 0.008;
   const dx = (e.clientX - last.x) * k;
@@ -1619,13 +1835,14 @@ canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
 
 canvas.addEventListener("wheel", e => {
+  if (pairKey) return;
   e.preventDefault();
   tween = null;
   view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0012), ZOOM_MIN, ZOOM_MAX);
 }, { passive: false });
 
 canvas.addEventListener("dblclick", e => {
-  if (hitTest(e.clientX, e.clientY)) return;
+  if (pairKey || hitTest(e.clientX, e.clientY)) return;
   closeInfo();
   animateView({ ...DEFAULT_VIEW }, 550);
 });
@@ -2021,6 +2238,7 @@ function setDrawer(open) {
 }
 statsBtn.addEventListener("click", () => setDrawer(!drawer.classList.contains("open")));
 $("drawerClose").addEventListener("click", () => setDrawer(false));
+$("back3d").addEventListener("click", () => setView2D(null));
 
 const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
 const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
@@ -2082,6 +2300,19 @@ function renderTools() {
 
   // --- 2. summary ---
   const axes = [["Cost", "cost", AXES.x.color], ["Portion", "portion", AXES.z.color], ["Taste", "taste", AXES.y.color]];
+  const views = [["3d", "3D view", "All three ratings"], ...Object.entries(PAIRS).map(([k, v]) => [k, v.label, ""])];
+  const viewCard = `<div class="tool">
+    <h3>Views <small>${pairKey ? "2D" : "3D"}</small></h3>
+    <div class="view-pick" id="viewPick">${views.map(([k, label, sub]) => {
+      const on = (k === "3d" && !pairKey) || k === pairKey;
+      const dots = k === "3d" ? ["cost", "portion", "taste"] : [PAIRS[k].x, PAIRS[k].y];
+      return `<button type="button" data-v="${k}" class="${on ? "on" : ""}" aria-pressed="${on}">
+        <span class="axes">${dots.map(d => `<i style="background:${DIM[d].color}"></i>`).join("")}</span>
+        ${esc(label)}${sub ? `<small>${sub}</small>` : ""}</button>`;
+    }).join("")}</div>
+    <div class="note">2D views flatten the plot onto two ratings, with a dashed trend line. Filters still apply.</div>
+  </div>`;
+
   const summaryCard = `<div class="tool">
     <h3>Summary <small>${s.length} food${s.length === 1 ? "" : "s"}</small></h3>
     ${s.length ? `<table class="stat-table">
@@ -2136,7 +2367,11 @@ function renderTools() {
     </table>` : `<div class="empty-note">No foods yet.</div>`}
   </div>`;
 
-  tools.innerHTML = filterCard + summaryCard + corrCard + valueCard + locCard;
+  tools.innerHTML = filterCard + viewCard + summaryCard + corrCard + valueCard + locCard;
+  $("viewPick").addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]"); if (!b) return;
+    setView2D(b.dataset.v === "3d" ? null : b.dataset.v);
+  });
 
   // wire up
   tools.querySelectorAll(".kw-pick[data-group]").forEach(g => g.addEventListener("click", e => {
