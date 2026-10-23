@@ -525,7 +525,8 @@
   .corr-row .bar { grid-column: 1 / -1; height: 6px; background: #f0ece2; border-radius: 3px; position: relative; }
   .corr-row .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
   .corr-row .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); }
-  .corr-row .words { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+  .corr-row .words { grid-column: 1 / -1; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+  .corr-row .words b { color: var(--ink); font-weight: 600; }
 
   .rank { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
   .rank li { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; align-items: baseline; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
@@ -759,7 +760,7 @@
         <input type="text" id="fItem" maxlength="60" placeholder="e.g. Burrito bowl" autocomplete="off">
       </div>
       <div class="field">
-        <span class="rating-head">Cost <output id="oCost">0 / 10</output></span>
+        <span class="rating-head"><span>Cost <span class="opt">· 10 = most affordable</span></span><output id="oCost">0 / 10</output></span>
         <div class="rating" id="rCost" style="--c: var(--c-cost)"></div>
       </div>
       <div class="field">
@@ -829,6 +830,10 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.19", d: "Oct 22, 2026", n: [
+    "Correlation now says in plain words which way things move, e.g. cheaper foods tend to come with smaller portions",
+    "Cost is treated as an affordability rating (10 = cheapest) throughout the stats",
+    "Best value now adds affordability instead of subtracting it: taste + portion + cost"] },
   { v: "1.18", d: "Oct 22, 2026", n: [
     "Half-point ratings: tap the left half of a circle for .5, so similar foods don't stack on top of each other",
     "Foods with identical ratings now fan apart in the 3D plot too",
@@ -2305,7 +2310,7 @@ function pearson(a, b) {
   return da && db2 ? num / Math.sqrt(da * db2) : null;
 }
 const fmt = (x, d = 1) => (Math.round(x * 10 ** d) / 10 ** d).toFixed(d);
-const valueScore = p => p.taste + p.portion - p.cost;
+const valueScore = p => p.taste + p.portion + p.cost;   // cost is affordability, so higher is better
 
 // values present on the plot for one group, most common first
 function groupCounts(key) {
@@ -2396,10 +2401,25 @@ function renderTools() {
 
   // --- 3. correlation ---
   const pairs = [["Cost", "cost", "Taste", "taste"], ["Cost", "cost", "Portion", "portion"], ["Portion", "portion", "Taste", "taste"]];
-  const words = r => {
+  // How each rating reads in words. A high cost rating means MORE affordable.
+  const SUBJ = {
+    cost:    { hi: "Cheaper foods",         lo: "pricier foods" },
+    portion: { hi: "Bigger portions",       lo: "smaller portions" },
+    taste:   { hi: "Better-tasting foods",  lo: "worse-tasting foods" },
+  };
+  const OBJ = {
+    cost:    { hi: "cost less",                    lo: "cost more" },
+    portion: { hi: "come with bigger portions",    lo: "come with smaller portions" },
+    taste:   { hi: "taste better",                 lo: "taste worse" },
+  };
+  const words = (r, ak, bk) => {
     const a = Math.abs(r), str = a >= .7 ? "Strong" : a >= .4 ? "Moderate" : a >= .2 ? "Weak" : "Little to no";
-    if (a < .2) return `${str} relationship`;
-    return `${str} ${r > 0 ? "positive" : "negative"}: ${r > 0 ? "they rise together" : "one rises as the other falls"}`;
+    if (a < .2) return `<b>${str} relationship.</b> Knowing one tells you little about the other.`;
+    const sa = SUBJ[ak], ob = OBJ[bk];
+    const sentence = r > 0
+      ? `${sa.hi} tend to ${ob.hi}, and ${sa.lo} tend to ${ob.lo}.`
+      : `${sa.hi} tend to ${ob.lo}, while ${sa.lo} tend to ${ob.hi}.`;
+    return `<b>${str} ${r > 0 ? "positive" : "negative"}.</b> ${sentence}`;
   };
   const corrCard = `<div class="tool">
     <h3>Correlation <small>Pearson r</small></h3>
@@ -2409,19 +2429,19 @@ function renderTools() {
       const w = Math.abs(r) * 50, left = r >= 0 ? 50 : 50 - w;
       return `<div class="corr-row"><span>${an} vs ${bn}</span><span class="r">${r >= 0 ? "+" : "−"}${fmt(Math.abs(r), 2)}</span>
         <span class="bar"><i style="left:${left}%;width:${w}%;background:${r >= 0 ? "var(--green)" : "var(--red)"}"></i></span>
-        <span class="words">${words(r)}</span></div>`;
+        <span class="words">${words(r, ak, bk)}</span></div>`;
     }).join("")}</div>
-    <div class="note">From −1 to +1. Does paying more get you better taste or bigger portions?</div>`
+    <div class="note">From −1 to +1. Cost is an affordability rating: a higher cost score means a cheaper food.</div>`
     : `<div class="empty-note">Needs at least 3 foods.</div>`}
   </div>`;
 
   // --- 4. best value ---
   const best = [...s].sort((a, b) => valueScore(b) - valueScore(a) || b.taste - a.taste).slice(0, 6);
   const valueCard = `<div class="tool">
-    <h3>Best value <small>taste + portion − cost</small></h3>
+    <h3>Best value <small>taste + portion + cost</small></h3>
     ${best.length ? `<ol class="rank">${best.map((p, i) =>
       `<li data-id="${esc(p.id)}"><span class="n">${i + 1}</span><span class="nm">${esc(p.item)}${p.location ? ` <small>· ${esc(p.location)}</small>` : ""}</span><span class="v">${valueScore(p)}</span></li>`).join("")}</ol>
-    <div class="note">Scores run from −10 to 20. Tap a food to fly to it.</div>`
+    <div class="note">Scores run from 0 to 30, and a higher cost score means more affordable. Tap a food to fly to it.</div>`
     : `<div class="empty-note">No foods to rank.</div>`}
   </div>`;
 
