@@ -173,6 +173,7 @@
   .mini-dots { display: flex; gap: 3px; }
   .mini-dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--c); display: block; }
   .mini-dots i.on { background: var(--c); }
+  .mini-dots i.half { background: linear-gradient(90deg, var(--c) 50%, transparent 50%); }
   .info .kw-head { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 11px 0 5px; }
 
   /* ---------- keyword chips (shared) ---------- */
@@ -284,6 +285,7 @@
     transition: transform .08s;
   }
   .rating i.on { background: var(--c); }
+  .rating i.half { background: linear-gradient(90deg, var(--c) 50%, transparent 50%); }
   .rating:hover i { transform: scale(1.04); }
 
   .field .hint-line { font-weight: 400; font-size: 11.5px; color: var(--muted); }
@@ -389,6 +391,7 @@
   .stats-btn svg { width: 18px; height: 18px; display: block; }
   .stats-btn:hover, .stats-btn:focus-visible { color: var(--blue); border-color: var(--blue); }
   .stats-btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+  .names-btn[aria-pressed="false"] { color: var(--muted); border-color: #b9b3a5; box-shadow: 2px 2px 0 #b9b3a5; }
   .stats-btn[aria-expanded="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
   .stats-btn .count { font-size: 10.5px; background: var(--blue); color: #fff; border-radius: 999px; padding: 1px 6px; }
   .stats-btn .count[hidden] { display: none; }
@@ -475,6 +478,15 @@
   .tool h3 { font-family: Silkscreen, monospace; font-weight: 400; font-size: 13px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .tool h3 small { font: 400 11px "Schibsted Grotesk", sans-serif; color: var(--muted); }
   .tool .note { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .loc-search { font-weight: 400; }
+  .loc-search input {
+    font: inherit; font-size: 13px;
+    padding: 7px 10px;
+    border: 2px solid var(--line); border-radius: 8px; background: #fff; outline: none;
+  }
+  .loc-search input:focus { border-color: var(--blue); }
+  .tool { position: relative; }
+  .tool .chips .chip button { color: inherit; }
   .tool .empty-note { font-size: 12.5px; color: var(--muted); padding: 6px 0; }
 
   @media (max-width: 760px) {
@@ -719,6 +731,12 @@
         </svg>
         Stats &amp; filters <span class="count" id="filterCount" hidden>0</span>
       </button>
+      <button class="stats-btn names-btn" id="namesBtn" type="button" aria-pressed="true" title="Show or hide food names on the plot">
+        <svg viewBox="0 0 12 12" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">
+          <path d="M1 2H7V3H8V4H9V5H10V6H9V7H8V8H7V9H1ZM3 4V6H5V4Z M10 9H11V10H10Z"/>
+        </svg>
+        <span id="namesText">Names on</span>
+      </button>
       <button class="back3d" id="back3d" type="button" hidden><span>&larr; 3D</span><b></b></button>
       <div class="filter-pill" id="filterPill" hidden></div>
     </div>
@@ -811,6 +829,11 @@
 <script>
 // Update log, newest first. Each published update adds a version at the top.
 const CHANGELOG = [
+  { v: "1.18", d: "Oct 22, 2026", n: [
+    "Half-point ratings: tap the left half of a circle for .5, so similar foods don't stack on top of each other",
+    "Foods with identical ratings now fan apart in the 3D plot too",
+    "New Names button next to Stats & filters to show or hide food names on the plot",
+    "Search to filter by location, at the top of the Filter card"] },
   { v: "1.17", d: "Oct 22, 2026", n: [
     "New 2D views in Stats & filters: Taste vs Portion size, Taste vs Cost, and Portion size vs Cost",
     "The 3D cube fades out and a flat chart rises in, with the same filters, details windows and a dashed trend line",
@@ -1077,15 +1100,16 @@ const PATH = "foods";   // fresh collection for the cuisine / style / food-type 
 // browser-only saves from early versions are no longer used
 ["foodPlotter.points.v2", "foodPlotter.points.v1"].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
 
+const half = v => clamp(Math.round(v * 2) / 2, 0, 10);   // ratings go in half-point steps
 const toList = v => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.values(v) : []);
 function normalize(p, id) {
   return {
     id: id || p.id || "",
     item: String(p.item ?? p.name ?? "").trim().slice(0, 60) || "Untitled",
     location: String(p.location ?? "").trim().slice(0, 60),
-    cost: clamp(Math.round(+p.cost || 0), 0, 10),
-    portion: clamp(Math.round(+p.portion || 0), 0, 10),
-    taste: clamp(Math.round(+p.taste || 0), 0, 10),
+    cost: half(+p.cost || 0),
+    portion: half(+p.portion || 0),
+    taste: half(+p.taste || 0),
     types: [...new Set((toList(p.types).length ? toList(p.types) : [p.type])
               .map(t => String(t ?? "").trim().toLowerCase().slice(0, 30)).filter(Boolean))].slice(0, 5),
     cuisine: toList(p.cuisine).map(k => String(k).toLowerCase()).filter(k => CUISINES.includes(k)).slice(0, 10),
@@ -1453,14 +1477,15 @@ function drawAxes() {
    Foods that fail drop through the floor and fade out; they rise
    back when the filter is cleared. New filter types just add a test. */
 // Within a group a food needs any one of the picks; across groups it needs all of them.
-const sel = { types: new Set(), cuisine: new Set(), style: new Set() };
+const sel = { location: new Set(), types: new Set(), cuisine: new Set(), style: new Set() };
 const groupTest = key => p => [...sel[key]].some(v => p[key].includes(v));
 const filters = {
+  location: { on: () => sel.location.size > 0, test: p => sel.location.has(p.location) },
   types:   { on: () => sel.types.size > 0,   test: groupTest("types") },
   cuisine: { on: () => sel.cuisine.size > 0, test: groupTest("cuisine") },
   style:   { on: () => sel.style.size > 0,   test: groupTest("style") },
 };
-const selectedCount = () => sel.types.size + sel.cuisine.size + sel.style.size;
+const selectedCount = () => sel.location.size + sel.types.size + sel.cuisine.size + sel.style.size;
 const clearFilters = () => Object.values(sel).forEach(x => x.clear());
 const activeFilters = () => Object.values(filters).filter(f => f.on());
 const passes = p => activeFilters().every(f => f.test(p));
@@ -1468,6 +1493,9 @@ const shownPoints = () => points.filter(passes);
 const vis = new Map();   // id -> 0..1, eased toward 1 (shown) or 0 (filtered out)
 
 let hits = [];  // screen positions of points from the last frame, for clicking
+// food names next to points (remembered per browser)
+let showNames = true;
+try { showNames = localStorage.getItem("foodPlotter.names") !== "off"; } catch (e) {}
 function pointRadius(scr, emphasized) {
   return (emphasized ? 7 : 5.5) * view.zoom * (scr.s / baseScale());
 }
@@ -1493,6 +1521,16 @@ function drawPoints() {
     const pos = [base[0], base[1] - (1 - v) * 1.6, base[2]];
     drawn.push({ p, v, base, pos, scr: project(pos) });
   }
+  // foods with identical ratings fan out in a small ring so none hide behind another
+  const same = new Map();
+  drawn.forEach(d => { const k = d.p.cost + "," + d.p.portion + "," + d.p.taste; if (!same.has(k)) same.set(k, []); same.get(k).push(d); });
+  same.forEach(list => {
+    if (list.length < 2) return;
+    list.forEach((d, i) => {
+      const a = (i / list.length) * Math.PI * 2 - Math.PI / 2, rr = 9 * (d.scr.s / baseScale()) * view.zoom;
+      d.scr = { ...d.scr, x: d.scr.x + Math.cos(a) * rr, y: d.scr.y + Math.sin(a) * rr };
+    });
+  });
   drawn.sort((a, b) => a.scr.depth - b.scr.depth); // far ones first
 
   // drop lines to the floor
@@ -1533,14 +1571,16 @@ function drawPoints() {
     ctx.strokeStyle = sel ? SELECTED_EDGE : emph ? "#1d1b26" : POINT_EDGE;
     ctx.stroke();
 
-    ctx.font = (emph ? "700 " : "600 ") + "12px 'Schibsted Grotesk'";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(255,255,255,.9)";
-    ctx.strokeText(p.item, scr.x + r + 5, scr.y);
-    ctx.fillStyle = "#1d1b26";
-    ctx.fillText(p.item, scr.x + r + 5, scr.y);
+    if (showNames || emph) {          // with names off, only the hovered / open food is labeled
+      ctx.font = (emph ? "700 " : "600 ") + "12px 'Schibsted Grotesk'";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(255,255,255,.9)";
+      ctx.strokeText(p.item, scr.x + r + 5, scr.y);
+      ctx.fillStyle = "#1d1b26";
+      ctx.fillText(p.item, scr.x + r + 5, scr.y);
+    }
     ctx.globalAlpha = LA;
   });
 
@@ -1707,11 +1747,13 @@ function draw2D(t) {
     ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
     ctx.lineWidth = emph ? 2 : 1.25;
     ctx.strokeStyle = sel ? SELECTED_EDGE : emph ? "#1d1b26" : POINT_EDGE; ctx.stroke();
-    ctx.font = (emph ? "700 " : "600 ") + "12px 'Schibsted Grotesk'";
-    ctx.textAlign = "left"; ctx.textBaseline = "middle";
-    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.9)";
-    ctx.strokeText(p.item, x + r + 5, y);
-    ctx.fillStyle = "#1d1b26"; ctx.fillText(p.item, x + r + 5, y);
+    if (showNames || emph) {
+      ctx.font = (emph ? "700 " : "600 ") + "12px 'Schibsted Grotesk'";
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,.9)";
+      ctx.strokeText(p.item, x + r + 5, y);
+      ctx.fillStyle = "#1d1b26"; ctx.fillText(p.item, x + r + 5, y);
+    }
   });
 
   // average point
@@ -1872,7 +1914,7 @@ const info = $("info");
 
 function dotsHtml(v, color) {
   let h = `<span class="mini-dots" style="--c:${color}">`;
-  for (let i = 1; i <= 10; i++) h += `<i class="${i <= v ? "on" : ""}"></i>`;
+  for (let i = 1; i <= 10; i++) h += `<i class="${i <= v ? "on" : i - 0.5 === v ? "half" : ""}"></i>`;
   return h + "</span>";
 }
 
@@ -1949,18 +1991,22 @@ function makeRating(el, outEl, label) {
   el.setAttribute("aria-valuemax", "10");
 
   const render = () => {
-    [...el.children].forEach((c, i) => c.classList.toggle("on", i < state.value));
+    [...el.children].forEach((c, i) => {
+      c.classList.toggle("on", i + 1 <= state.value);
+      c.classList.toggle("half", i + 0.5 === state.value);
+    });
     outEl.textContent = `${state.value} / 10`;
     el.setAttribute("aria-valuenow", state.value);
   };
   const set = v => { state.value = clamp(v, 0, 10); render(); };
 
-  // value comes from where along the bar you click: each circle is one tenth.
-  // Clicking the left edge of the first circle gives 0.
+  // value comes from where along the bar you click: each circle is one point,
+  // each half circle half a point. Clicking the left edge of the first circle gives 0.
   const fromX = clientX => {
     const r = el.getBoundingClientRect();
     const f = (clientX - r.left) / r.width;
-    return clamp(Math.ceil(f * 10 - 0.35), 0, 10);
+    // left half of a circle = .5, right half = whole number
+    return clamp(Math.ceil(f * 20 - 0.35) / 2, 0, 10);
   };
   let down = false;
   el.addEventListener("pointerdown", e => { down = true; el.setPointerCapture(e.pointerId); set(fromX(e.clientX)); });
@@ -1968,8 +2014,8 @@ function makeRating(el, outEl, label) {
   el.addEventListener("pointerup", () => down = false);
   el.addEventListener("pointercancel", () => down = false);
   el.addEventListener("keydown", e => {
-    if (e.key === "ArrowRight" || e.key === "ArrowUp") { set(state.value + 1); e.preventDefault(); }
-    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") { set(state.value - 1); e.preventDefault(); }
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") { set(state.value + 0.5); e.preventDefault(); }
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") { set(state.value - 0.5); e.preventDefault(); }
     else if (e.key === "Home") { set(0); e.preventDefault(); }
     else if (e.key === "End") { set(10); e.preventDefault(); }
   });
@@ -2239,6 +2285,16 @@ function setDrawer(open) {
 statsBtn.addEventListener("click", () => setDrawer(!drawer.classList.contains("open")));
 $("drawerClose").addEventListener("click", () => setDrawer(false));
 $("back3d").addEventListener("click", () => setView2D(null));
+function renderNamesBtn() {
+  $("namesBtn").setAttribute("aria-pressed", String(showNames));
+  $("namesText").textContent = showNames ? "Names on" : "Names off";
+}
+$("namesBtn").addEventListener("click", () => {
+  showNames = !showNames;
+  try { localStorage.setItem("foodPlotter.names", showNames ? "on" : "off"); } catch (e) {}
+  renderNamesBtn();
+});
+renderNamesBtn();
 
 const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
 const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
@@ -2267,7 +2323,7 @@ function renderPill() {
   const pill = $("filterPill"), n = selectedCount();
   $("filterCount").hidden = !n; $("filterCount").textContent = n;
   if (!n) { pill.hidden = true; return; }
-  const parts = ["types", "cuisine", "style"].filter(k => sel[k].size).map(k => [...sel[k]].map(esc).join(" or "));
+  const parts = ["location", "types", "cuisine", "style"].filter(k => sel[k].size).map(k => [...sel[k]].map(esc).join(" or "));
   pill.innerHTML = `Showing <b>${parts.join(" · ")}</b> · ${shownPoints().length} of ${points.length}<button type="button" id="pillClear">Clear</button>`;
   pill.hidden = false;
   $("pillClear").onclick = () => { clearFilters(); applyFilterChange(); };
@@ -2280,6 +2336,9 @@ function renderTools() {
     ? `Stats use the ${s.length} food${s.length === 1 ? "" : "s"} shown`
     : `${s.length} food${s.length === 1 ? "" : "s"}`;
 
+  const keep = document.activeElement && document.activeElement.id === "locSearch"
+    ? { v: document.activeElement.value, a: document.activeElement.selectionStart } : null;
+
   // --- 1. filter ---
   const group = (key, title) => {
     const c = groupCounts(key);
@@ -2288,10 +2347,21 @@ function renderTools() {
       <div class="kw-pick" data-group="${key}">${c.map(([v, n]) =>
         `<button type="button" data-k="${esc(v)}" class="${sel[key].has(v) ? "on" : ""}" aria-pressed="${sel[key].has(v)}">${esc(v)}<span>${n}</span></button>`).join("")}</div></div>`;
   };
-  const groupsHtml = group("types", "Food type") + group("cuisine", "Cuisine") + group("style", "Style");
+  const locSel = [...sel.location];
+  const locSearch = `<div class="pick-group">
+      <span class="pick-label">Location</span>
+      <div class="field loc-search">
+        <input type="text" id="locSearch" placeholder="Search locations…" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="locSuggest" aria-autocomplete="list">
+        <ul class="suggest" id="locSuggest" role="listbox" hidden></ul>
+      </div>
+      ${locSel.length ? `<div class="chips" id="locChips">${locSel.map(l =>
+        `<span class="chip">${esc(l)}<button type="button" data-l="${esc(l)}" aria-label="Remove ${esc(l)}">&times;</button></span>`).join("")}</div>` : ""}
+    </div>`;
+  const groupsHtml = locSearch + group("types", "Food type") + group("cuisine", "Cuisine") + group("style", "Style");
   const filterCard = `<div class="tool">
     <h3>Filter <small>${selectedCount() ? `${s.length} of ${points.length} shown` : "tap to filter"}</small></h3>
-    ${groupsHtml || `<div class="empty-note">Add some foods to filter by type, cuisine and style.</div>`}
+    ${points.length ? groupsHtml : `<div class="empty-note">Add some foods to filter by location, type, cuisine and style.</div>`}
     <div class="tool-row">
       <span class="note">Any pick within a group, every group you use.</span>
       <button type="button" class="link-btn" id="kwClear" ${selectedCount() ? "" : "disabled"}>Clear</button>
@@ -2381,6 +2451,31 @@ function renderTools() {
     applyFilterChange();
   }));
   $("kwClear").addEventListener("click", () => { clearFilters(); applyFilterChange(); });
+
+  // location search: pick a place that has foods on the plot
+  const ls = $("locSearch");
+  if (ls) {
+    makeCombo(ls, $("locSuggest"), () => {
+      const counts = new Map();
+      points.forEach(p => p.location && counts.set(p.location, (counts.get(p.location) || 0) + 1));
+      return [...counts].filter(([l]) => !sel.location.has(l))
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([l, n]) => ({ label: l, sub: `${n} food${n === 1 ? "" : "s"}` }));
+    }, o => {
+      sel.location.add(o.label);
+      ls.value = "";                 // clear the box so the next search starts fresh
+      applyFilterChange();
+      // keep the cursor in the box, but leave the list closed until you type again
+      setTimeout(() => { const n = $("locSearch"); if (n) { n.focus(); $("locSuggest").hidden = true; n.setAttribute("aria-expanded", "false"); } }, 0);
+    });
+    if (keep) { ls.value = keep.v; ls.focus(); try { ls.setSelectionRange(keep.a, keep.a); } catch (e) {} }
+  }
+  const lc = $("locChips");
+  if (lc) lc.addEventListener("click", e => {
+    const b = e.target.closest("button[data-l]"); if (!b) return;
+    sel.location.delete(b.dataset.l);
+    applyFilterChange();
+  });
   const avg = $("avgToggle");
   if (avg) avg.addEventListener("change", () => { showAvg = avg.checked; });
   tools.querySelectorAll(".rank li[data-id]").forEach(li => li.addEventListener("click", () => focusPoint(li.dataset.id)));

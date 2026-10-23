@@ -18,9 +18,9 @@
         "type":      { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" },
         "location":  { ".validate": "newData.isString() && newData.val().length <= 60" },
         "author":    { ".validate": "newData.isString() && newData.val().length <= 40" },
-        "cost":      { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
-        "portion":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
-        "taste":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && newData.val() % 1 === 0" },
+        "cost":      { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && (newData.val() * 2) % 1 === 0" },
+        "portion":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && (newData.val() * 2) % 1 === 0" },
+        "taste":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10 && (newData.val() * 2) % 1 === 0" },
         "cuisine": {
           "$k": { ".validate": "$k.matches(/^[0-9]$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 30" }
         },
